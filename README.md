@@ -1,0 +1,2 @@
+# Streamarr
+Unified streaming manager
