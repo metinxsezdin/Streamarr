@@ -8,7 +8,7 @@ import time
 import re
 import json
 from urllib.parse import urljoin
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
@@ -18,6 +18,256 @@ class DiziboxScraper:
         self.embed_id = None
         self.quality_url = None
         self.quality_content = None
+        self.last_episode_url = None
+
+    def click_videoyu_baslat(self, page):
+        """Follow the nested iframe path discovered via codegen."""
+        try:
+            outer_iframe = page.wait_for_selector("#video-area iframe", timeout=8000)
+        except PlaywrightTimeout:
+            return False
+
+        outer_frame = outer_iframe.content_frame()
+        if not outer_frame:
+            return False
+
+        try:
+            player_iframe = outer_frame.wait_for_selector("#Player iframe", timeout=8000)
+        except PlaywrightTimeout:
+            return False
+
+        player_frame = player_iframe.content_frame()
+        if not player_frame:
+            return False
+
+        try:
+            play_button = player_frame.wait_for_selector("text=Videoyu Başlat", timeout=6000)
+        except PlaywrightTimeout:
+            return False
+
+        try:
+            play_button.click(timeout=2000, force=True)
+            print("  [auto] Clicked 'Videoyu Başlat' inside nested iframes")
+            player_frame.wait_for_timeout(500)
+            return True
+        except Exception:
+            return False
+
+    def auto_start_player(self, page):
+        """Attempt to start playback without manual interaction."""
+        print("\n[auto] Trying to start the player automatically...")
+        time.sleep(1.0)
+
+        if not self.embed_id:
+            for _ in range(15):
+                if self.embed_id:
+                    break
+                try:
+                    page.wait_for_timeout(200)
+                except Exception:
+                    time.sleep(0.2)
+
+        # Try the deterministic nested iframe path first
+        clicked_codegen = self.click_videoyu_baslat(page)
+        if clicked_codegen:
+            # Allow a brief moment for the embed/player to initialize
+            page.wait_for_timeout(1000)
+
+        keywords = ("embed", "molystream", "player", "video")
+
+        def collect_candidate_frames():
+            frames = []
+            for frame in page.frames:
+                frame_url = (frame.url or "").lower()
+                if any(word in frame_url for word in keywords):
+                    frames.append(frame)
+            if page.main_frame not in frames:
+                frames.insert(0, page.main_frame)
+            return frames
+
+        play_selectors = [
+            "button[aria-label='Play']",
+            "button.vjs-big-play-button",
+            ".vjs-big-play-button",
+            ".plyr__control--overlaid",
+            ".jw-icon-playback",
+            ".jw-button-play",
+            ".btn.btn-play",
+            ".btn-play",
+            "#play",
+            ".fa-play-circle",
+            ".fa-play"
+        ]
+
+        dismiss_selectors = [
+            "button[aria-label='Close']",
+            ".vjs-close-button",
+            ".modal__close",
+            ".overlay-close",
+            ".adsbox-close",
+            ".close"
+        ]
+
+        attempted_embed = False
+
+        for attempt in range(2):
+            candidate_frames = collect_candidate_frames()
+            play_triggered = False
+
+            for frame in candidate_frames:
+                frame_desc = frame.url or "main document"
+                print(f"  [auto] Inspecting frame: {frame_desc}")
+                try:
+                    frame.wait_for_load_state('domcontentloaded', timeout=5000)
+                except Exception:
+                    pass
+
+                for selector in dismiss_selectors:
+                    try:
+                        element = frame.query_selector(selector)
+                        if element:
+                            print(f"    [auto] Closing overlay via selector: {selector}")
+                            element.click(timeout=2000, force=True)
+                            time.sleep(0.3)
+                    except Exception:
+                        continue
+
+                for selector in play_selectors:
+                    try:
+                        element = frame.query_selector(selector)
+                        if element:
+                            print(f"    [auto] Clicking play selector: {selector}")
+                            element.click(timeout=2000, force=True)
+                            time.sleep(0.8)
+                            play_triggered = True
+                            break
+                    except Exception:
+                        continue
+
+                if play_triggered:
+                    break
+
+                try:
+                    triggered = frame.evaluate(
+                        """
+                        () => {
+                            const videos = Array.from(document.querySelectorAll('video'));
+                            let started = 0;
+                            for (const video of videos) {
+                                try {
+                                    video.muted = true;
+                                    const result = video.play();
+                                    if (result && typeof result.then === 'function') {
+                                        result.then(() => {}).catch(() => {});
+                                    }
+                                    started += 1;
+                                } catch (err) {
+                                    // Ignore per-video failures
+                                }
+                            }
+                            return started;
+                        }
+                        """
+                    )
+                    if triggered:
+                        print(f"    [auto] JS play() triggered on {triggered} video element(s)")
+                        time.sleep(1.0)
+                        play_triggered = True
+                        break
+                except Exception:
+                    pass
+
+                try:
+                    box = frame.evaluate(
+                        """
+                        () => {
+                            const video = document.querySelector('video');
+                            if (!video) {
+                                return null;
+                            }
+                            const rect = video.getBoundingClientRect();
+                            return {
+                                x: rect.left + rect.width / 2,
+                                y: rect.top + rect.height / 2
+                            };
+                        }
+                        """
+                    )
+                    if box:
+                        print("    [auto] Clicking video element center via mouse actions")
+                        x = float(box["x"])
+                        y = float(box["y"])
+                        page.mouse.move(x, y)
+                        page.mouse.click(x, y)
+                        time.sleep(0.8)
+                        play_triggered = True
+                        break
+                except Exception:
+                    pass
+
+            if play_triggered:
+                return True
+
+            if (
+                attempt == 0
+                and self.embed_id
+                and "molystream" not in (page.url or "").lower()
+                and not attempted_embed
+                and not clicked_codegen
+            ):
+                embed_url = f"https://dbx.molystream.org/embed/{self.embed_id}"
+                print(f"  [auto] Retrying inside embed: {embed_url}")
+                try:
+                    page.goto(
+                        embed_url,
+                        wait_until='domcontentloaded',
+                        timeout=30000,
+                        referer=self.last_episode_url
+                    )
+                    time.sleep(2.0)
+                    attempted_embed = True
+                    continue
+                except Exception as exc:
+                    print(f"  [auto] Embed retry failed: {exc}")
+                    break
+            else:
+                break
+
+        try:
+            played_count = page.evaluate(
+                """
+                () => {
+                    const videos = Array.from(document.querySelectorAll('video'));
+                    let triggered = 0;
+                    for (const video of videos) {
+                        try {
+                            video.muted = true;
+                            const result = video.play();
+                            if (result && typeof result.then === 'function') {
+                                result.then(() => {}).catch(() => {});
+                            }
+                            triggered += 1;
+                        } catch (err) {
+                            // Ignore individual failures
+                        }
+                    }
+                    return triggered;
+                }
+                """
+            )
+            if played_count:
+                print(f"  [auto] Triggered play() on {played_count} video element(s)")
+                time.sleep(1.0)
+                return True
+        except Exception as exc:
+            print(f"  [auto] JavaScript play() fallback failed: {exc}")
+
+        if clicked_codegen:
+            # We at least triggered the primary play button; allow caller to keep listening
+            return True
+
+        print("  [auto] Unable to auto-start playback.")
+        return False
     
     def get_stream_url(self, episode_url):
         """Extract stream URL from episode page"""
@@ -27,6 +277,10 @@ class DiziboxScraper:
         print(f"\nEpisode: {episode_url}\n")
         
         quality_responses = {}
+        self.embed_id = None
+        self.quality_url = None
+        self.quality_content = None
+        self.last_episode_url = episode_url
         
         def handle_response(response):
             url = response.url
@@ -66,10 +320,14 @@ class DiziboxScraper:
                 page.goto(episode_url, wait_until='domcontentloaded', timeout=30000)
                 time.sleep(3)
                 
-                print("\n[2/3] Please click PLAY button!")
-                print("  Waiting for quality URL...\n")
+                print("\n[2/3] Attempting to start playback automatically...")
+                auto_started = self.auto_start_player(page)
+                if auto_started:
+                    print("  [auto] Playback trigger sent; waiting for stream response...\n")
+                else:
+                    print("  [auto] Automatic trigger not confirmed; listening for stream traffic regardless...\n")
                 
-                for i in range(30):
+                for i in range(60):
                     if self.quality_url and self.quality_content:
                         print(f"\n  ✓ Stream captured after {i+1}s!")
                         break
@@ -126,9 +384,20 @@ class DiziboxScraper:
 
 def main():
     """Test the scraper"""
-    test_url = "https://www.dizibox.live/invasion-3-sezon-8-bolum-izle/"
+    default_url = "https://www.dizibox.live/invasion-3-sezon-8-bolum-izle/"
+    args = sys.argv[1:]
+
+    headless = True
+    if '--headed' in args:
+        headless = False
+        args.remove('--headed')
+
+    if args:
+        test_url = args[0]
+    else:
+        test_url = default_url
     
-    scraper = DiziboxScraper(headless=False)
+    scraper = DiziboxScraper(headless=headless)
     result = scraper.get_stream_url(test_url)
     
     if result:

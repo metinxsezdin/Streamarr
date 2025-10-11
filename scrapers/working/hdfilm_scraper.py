@@ -7,7 +7,7 @@ import sys
 import io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 import re
 import time
 from urllib.parse import urljoin
@@ -19,6 +19,137 @@ class HDFilmScraper:
         self.headless = headless
         self.master_url = None
         self.embed_url = None
+        self.last_page_url = None
+
+    def auto_start_player(self, page):
+        """Attempt to trigger the player without manual interaction."""
+        print("\n[auto] Starting playback automatically...")
+        triggered = False
+
+        try:
+            overlay = page.wait_for_selector(".play-that-video", timeout=8000)
+            if overlay:
+                overlay.click(timeout=2000, force=True)
+                print("  [auto] Clicked main poster overlay")
+                triggered = True
+        except PlaywrightTimeout:
+            print("  [auto] Overlay '.play-that-video' not found")
+        except Exception as exc:
+            print(f"  [auto] Overlay click failed: {exc}")
+
+        try:
+            applied = page.evaluate(
+                """
+                () => {
+                    const container = document.querySelector('.video-container');
+                    if (!container) {
+                        return false;
+                    }
+                    const iframe = container.querySelector('iframe');
+                    if (!iframe) {
+                        return false;
+                    }
+                    let changed = false;
+                    if (iframe.dataset && iframe.dataset.src && !iframe.src) {
+                        iframe.src = iframe.dataset.src;
+                        changed = true;
+                    }
+                    if (container.hasAttribute('hidden')) {
+                        container.removeAttribute('hidden');
+                        changed = true;
+                    }
+                    return changed;
+                }
+                """
+            )
+            if applied:
+                print("  [auto] Activated hidden iframe container")
+                triggered = True
+        except Exception as exc:
+            print(f"  [auto] Failed to activate iframe container: {exc}")
+
+        iframe_frame = None
+        try:
+            iframe_element = page.wait_for_selector(".video-container iframe", timeout=8000)
+            iframe_frame = iframe_element.content_frame()
+            if iframe_element:
+                src = iframe_element.get_attribute("src") or iframe_element.get_attribute("data-src")
+                if src:
+                    self.embed_url = src
+                    print(f"  [auto] Detected embed iframe: {src[:80]}...")
+        except PlaywrightTimeout:
+            print("  [auto] No iframe appeared after attempting activation")
+            return triggered
+        except Exception as exc:
+            print(f"  [auto] Failed to obtain iframe frame: {exc}")
+            return triggered
+
+        if not iframe_frame:
+            print("  [auto] Unable to resolve iframe content frame")
+            return triggered
+
+        try:
+            iframe_frame.wait_for_load_state('domcontentloaded', timeout=8000)
+        except PlaywrightTimeout:
+            pass
+        except Exception:
+            pass
+
+        # Deterministic path recorded via Playwright codegen.
+        try:
+            play_button = iframe_frame.get_by_role("button", name="Play Video")
+            play_button.click(timeout=3000)
+            print("  [auto] Clicked iframe play button (role=button, name='Play Video')")
+            iframe_frame.wait_for_timeout(800)
+            return True
+        except Exception as exc:
+            print(f"  [auto] Codegen play button click failed: {exc}")
+
+        play_selectors = [
+            "button.vjs-big-play-button",
+            ".vjs-big-play-button",
+            ".plyr__control--overlaid",
+            "button[title='Play Video']",
+            ".btn-play",
+        ]
+
+        for selector in play_selectors:
+            try:
+                button = iframe_frame.query_selector(selector)
+                if button:
+                    button.click(timeout=2000, force=True)
+                    print(f"  [auto] Clicked player selector: {selector}")
+                    iframe_frame.wait_for_timeout(800)
+                    return True
+            except Exception:
+                continue
+
+        try:
+            played = iframe_frame.evaluate(
+                """
+                () => {
+                    const video = document.querySelector('video');
+                    if (!video) {
+                        return false;
+                    }
+                    video.muted = true;
+                    const result = video.play();
+                    if (result && typeof result.then === 'function') {
+                        result.then(() => {}).catch(() => {});
+                    }
+                    return true;
+                }
+                """
+            )
+            if played:
+                print("  [auto] Triggered video.play() fallback")
+                iframe_frame.wait_for_timeout(1000)
+                return True
+        except Exception as exc:
+            print(f"  [auto] video.play() fallback failed: {exc}")
+
+        print("  [auto] Unable to auto-start playback inside iframe")
+        return triggered
         
     def extract_embed_url(self, page_url):
         """Extract embed iframe URL from movie page"""
@@ -208,8 +339,13 @@ class HDFilmScraper:
         print("  HDFilmCehennemi Scraper - Proof of Concept")
         print("="*80)
         
-        master_urls = []  # Just capture URLs, fetch content separately!
-        embed_url = None
+        master_urls = []
+        self.master_url = None
+        self.embed_url = None
+        self.last_page_url = page_url
+
+        content = None
+        variants = []
         
         def handle_response(response):
             url = response.url
@@ -239,18 +375,12 @@ class HDFilmScraper:
                 page.goto(page_url, wait_until='domcontentloaded', timeout=30000)
                 time.sleep(3)
                 
-                # Step 2: Manual play - stay on movie page
-                print("\n" + "="*60)
-                print("  MANUEL ACTION REQUIRED")
-                print("="*60)
-                print("  1. Film sayfasında PLAY butonuna basın")
-                print("  2. Bekleyin - otomatik yakalayacağız!")
-                print("\n  NOT: Sayfayı kapatmayın!")
-                print("="*60)
-                
-                # DON'T wait for input - just auto-capture!
-                print("\n[2/2] Waiting for master URL (auto-capture)...")
-                print("  Please click PLAY button now if you haven't already...")
+                print("\n[2/2] Attempting to start playback automatically...")
+                auto_started = self.auto_start_player(page)
+                if auto_started:
+                    print("  [auto] Playback trigger sent; waiting for master playlist...\n")
+                else:
+                    print("  [auto] Trigger could not be confirmed; listening for stream traffic...\n")
                 
                 # Use Playwright's wait instead of time.sleep - this processes events!
                 for i in range(60):
@@ -260,7 +390,7 @@ class HDFilmScraper:
                     
                     # Progress feedback every 5 seconds
                     if (i + 1) % 5 == 0:
-                        print(f"  [{i+1}s] Still waiting... (make sure video is loading)")
+                        print(f"  [{i+1}s] Still waiting... (ensure video is loading)")
                     
                     # Use page.wait_for_timeout instead of time.sleep!
                     # This allows Playwright event loop to process events
@@ -268,7 +398,7 @@ class HDFilmScraper:
                 
                 if not master_urls:
                     print("  ✗ No master URL captured!")
-                    print("  Tip: Make sure video actually started playing")
+                    print("  Tip: Make sure the video actually started.")
                     return None
                 
                 # Use the FIRST captured URL
@@ -276,7 +406,7 @@ class HDFilmScraper:
                 print(f"  Master URL: {self.master_url[:80]}...")
                 
                 # NOW fetch content using JavaScript (browser still open!)
-                print(f"  Fetching playlist content via browser...")
+                print("  Fetching playlist content via browser context...")
                 try:
                     content = page.evaluate(f"""
                         async () => {{
@@ -310,6 +440,8 @@ class HDFilmScraper:
                 time.sleep(2)
                 browser.close()
         
+        embed_url = self.embed_url
+
         print("\n" + "="*80)
         print("  RESULTS")
         print("="*80)
