@@ -4,8 +4,12 @@
 HDFilmCehennemi Proof-of-Concept Scraper
 """
 import sys
-import io
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 import re

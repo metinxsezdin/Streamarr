@@ -2,15 +2,19 @@
 Dizibox Scraper - Proof of Concept
 Captures M3U8 stream URL from Dizibox episodes
 """
-import sys
-import io
 import time
 import re
 import json
 from urllib.parse import urljoin
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 class DiziboxScraper:
     def __init__(self, headless=False):

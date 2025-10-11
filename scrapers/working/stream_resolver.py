@@ -37,7 +37,7 @@ def resolve_stream(
     site: Optional[str] = None,
     *,
     headless: bool = True,
-    quiet: bool = False,
+    quiet: bool = False,  # retained for API compatibility, no-op
 ) -> Dict[str, Any]:
     """
     Resolve a streaming page URL into playable stream metadata.
@@ -57,36 +57,15 @@ def resolve_stream(
     if site not in SUPPORTED_SITES:
         raise ValueError(f"Unsupported site: {site}")
 
-    buffer = StringIO()
     result: Optional[Dict[str, Any]] = None
-    original_stdout = sys.stdout
-    default_stdout = sys.__stdout__
 
-    if quiet:
-        try:
-            with redirect_stdout(buffer):
-                if site == "dizibox":
-                    scraper = DiziboxScraper(headless=headless)
-                    result = scraper.get_stream_url(url)
-                elif site == "hdfilm":
-                    scraper = HDFilmScraper(headless=headless)
-                    result = scraper.get_stream_info(url)
-        except ValueError as exc:
-            # Some scripts manipulate sys.stdout; fall back to verbose mode
-            print(f"[resolver] quiet mode failed ({exc}), retrying with verbose output.")
-            quiet = False
-
-    if not result and not quiet:
-        if site == "dizibox":
-            scraper = DiziboxScraper(headless=headless)
-            result = scraper.get_stream_url(url)
-        elif site == "hdfilm":
-            scraper = HDFilmScraper(headless=headless)
-            result = scraper.get_stream_info(url)
-    # Restore stdout in case scrapers modified it
-    sys.stdout = original_stdout if original_stdout and not getattr(original_stdout, "closed", False) else default_stdout
-
-    debug_output = buffer.getvalue() if quiet else ""
+    if site == "dizibox":
+        scraper = DiziboxScraper(headless=headless)
+        result = scraper.get_stream_url(url)
+    elif site == "hdfilm":
+        scraper = HDFilmScraper(headless=headless)
+        result = scraper.get_stream_info(url)
+    debug_output = ""
 
     if not result:
         raise RuntimeError(f"Failed to resolve stream for site={site} url={url}")
