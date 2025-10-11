@@ -15,23 +15,31 @@ Endpoints:
             }
         Response contains a temporary token and metadata.
     GET /stream/<token>
-        Retrieve cached stream details for playback while token is valid.
+        Retrieve cached stream details. By default responds with HTTP redirect
+        to the proxied stream URL. Append `?format=json` for metadata.
 """
 from __future__ import annotations
 
+import os
 import time
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Tuple
+from urllib.parse import quote_plus
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, redirect, request
 
 from stream_resolver import resolve_stream, SUPPORTED_SITES
+from catalog_store import load_catalog, get_entry
 
 app = Flask(__name__)
 
 TOKEN_TTL_SECONDS = 5 * 60  # 5 minutes
+PROXY_BASE_URL = os.environ.get("PROXY_BASE_URL")
+CATALOG_PATH = Path(os.environ.get("CATALOG_PATH", Path(__file__).resolve().parent / "data/catalog.json"))
 _token_cache: Dict[str, Dict] = {}
+_catalog_index: Dict[str, Dict] = load_catalog(CATALOG_PATH)
 
 
 def _cleanup_expired() -> None:
@@ -51,10 +59,24 @@ def _store_token(data: Dict) -> Tuple[str, float]:
 
 def _resolve_stream_url(site: str, result: Dict) -> str:
     if site == "dizibox":
-        return result.get("proxy_url") or result.get("quality_url")
-    if site == "hdfilm":
-        return result.get("master_url")
-    return ""
+        base = result.get("quality_url") if PROXY_BASE_URL else result.get("proxy_url") or result.get("quality_url")
+    elif site == "hdfilm":
+        base = result.get("master_url")
+    else:
+        base = ""
+    return _apply_proxy(site, base, result)
+
+
+def _apply_proxy(site: str, stream_url: str, result: Dict) -> str:
+    if not stream_url:
+        return ""
+    proxy_base = PROXY_BASE_URL.rstrip("/") if PROXY_BASE_URL else None
+    if proxy_base:
+        encoded = quote_plus(stream_url, safe="")
+        return f"{proxy_base}/stream/{encoded}"
+    if site == "dizibox":
+        return result.get("proxy_url") or stream_url
+    return stream_url
 
 
 @app.get("/health")
@@ -65,11 +87,20 @@ def health() -> tuple[dict, int]:
 @app.post("/resolve")
 def resolve_route() -> tuple[dict, int]:
     payload = request.get_json(force=True, silent=True) or {}
+    content_id = payload.get("id")
     url = payload.get("url")
+    site = payload.get("site")
+
+    if content_id:
+        entry = get_entry(_catalog_index, content_id)
+        if not entry:
+            return {"error": f"Unknown id '{content_id}'"}, 404
+        url = entry.get("url")
+        site = entry.get("site")
+
     if not url:
         return {"error": "Missing 'url' field"}, 400
 
-    site = payload.get("site")
     if site and site not in SUPPORTED_SITES:
         return {"error": f"Unsupported site '{site}'"}, 400
 
@@ -94,6 +125,7 @@ def resolve_route() -> tuple[dict, int]:
         "token": token,
         "expires_at": expires_at_iso,
         "proxy_url": f"/stream/{token}",
+        "redirect_url": f"/stream/{token}",
         "stream_url": stream_url,
         "resolver": data,
     }
@@ -120,7 +152,45 @@ def stream_route(token: str) -> tuple[dict, int]:
         "expires_at": expires_at_iso,
         "details": data["result"],
     }
-    return jsonify(response), 200
+    if request.args.get("format") == "json":
+        return jsonify(response), 200
+    return redirect(stream_url, code=302)
+
+
+@app.get("/play/<path:content_id>")
+def play_route(content_id: str):
+    entry = get_entry(_catalog_index, content_id)
+    if not entry:
+        return {"error": "Unknown id"}, 404
+
+    site = entry.get("site")
+    if site not in SUPPORTED_SITES:
+        return {"error": f"Unsupported site '{site}'"}, 400
+
+    try:
+        data = resolve_stream(
+            entry["url"],
+            site=site,
+            headless=True,
+            quiet=False,
+        )
+    except Exception as exc:
+        return {"error": str(exc)}, 500
+
+    token, expires_at_ts = _store_token(data)
+    if request.args.get("format") == "json":
+        expires_iso = datetime.fromtimestamp(expires_at_ts, tz=timezone.utc).isoformat()
+        stream_url = _resolve_stream_url(data["site"], data["result"])
+        return jsonify(
+            {
+                "token": token,
+                "expires_at": expires_iso,
+                "stream_url": stream_url,
+                "resolver": data,
+            }
+        ), 200
+
+    return redirect(f"/stream/{token}", code=302)
 
 
 def create_app() -> Flask:
