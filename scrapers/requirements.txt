@@ -1,0 +1,11 @@
+# HDFilmCehennemi Scraper Requirements
+
+# Browser automation
+playwright>=1.40.0
+
+# HTTP requests
+requests>=2.31.0
+
+# Web framework (for proxy server)
+flask>=3.0.0
+
