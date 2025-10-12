@@ -7,11 +7,21 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <JellyfinTargetVersion>10.10.0</JellyfinTargetVersion>
+  </PropertyGroup>
+
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Controller" Version="10.10.7" />
-    <PackageReference Include="Jellyfin.Common" Version="10.10.7" />
-    <PackageReference Include="Jellyfin.Model" Version="10.10.7" />
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinTargetVersion)" />
+    <PackageReference Include="Jellyfin.Common" Version="$(JellyfinTargetVersion)" />
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinTargetVersion)" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="manifest.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
