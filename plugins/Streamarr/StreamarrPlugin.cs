@@ -23,6 +23,7 @@ public class StreamarrPlugin : BasePlugin<StreamarrPluginConfiguration>, IHasWeb
         yield return new PluginPageInfo
         {
             Name = "streamarr",
+            DisplayName = "Streamarr",
             EmbeddedResourcePath = $"{GetType().Namespace}.Configuration.configPage.html"
         };
     }
