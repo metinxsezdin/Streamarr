@@ -9,6 +9,13 @@
     "imageUrl": "",
     "versions": [
       {
+        "version": "0.1.7",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/metinxsezdin/Streamarr/releases/download/v0.1.7/StreamarrPlugin.zip",
+        "checksum": "f42dc00f276ba334ccf8019302852428",
+        "timestamp": "2025-10-12T04:13:17Z"
+      },
+      {
         "version": "0.1.6",
         "targetAbi": "10.9.0.0",
         "sourceUrl": "https://github.com/metinxsezdin/Streamarr/releases/download/v0.1.6/StreamarrPlugin.zip",

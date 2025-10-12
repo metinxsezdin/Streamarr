@@ -20,11 +20,18 @@ public class StreamarrPlugin : BasePlugin<StreamarrPluginConfiguration>, IHasWeb
 
     public IEnumerable<PluginPageInfo> GetPages()
     {
-        yield return new PluginPageInfo
+        return new[]
         {
-            Name = "streamarr",
-            DisplayName = "Streamarr",
-            EmbeddedResourcePath = $"{GetType().Namespace}.Configuration.configPage.html"
+            new PluginPageInfo
+            {
+                Name = "streamarr",
+                EmbeddedResourcePath = $"{GetType().Namespace}.Configuration.configPage.html"
+            },
+            new PluginPageInfo
+            {
+                Name = "streamarrjs",
+                EmbeddedResourcePath = $"{GetType().Namespace}.Configuration.configPage.js"
+            }
         };
     }
 }
