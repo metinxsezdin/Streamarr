@@ -1,0 +1,20 @@
+[
+  {
+    "guid": "68c71f7d-a14e-4f21-9e10-7c02f51ae7b0",
+    "name": "Streamarr",
+    "category": "General",
+    "description": "",
+    "overview": "",
+    "owner": "metinxsezdin",
+    "imageUrl": "",
+    "versions": [
+      {
+        "version": "0.1.1",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/metinxsezdin/Streamarr/releases/download/v0.1.1/StreamarrPlugin.zip",
+        "checksum": "sha256:7fcd425f4867ad3368de014faaf0d3897d88d86cd1aa4ba9c660277478d1cf5f",
+        "timestamp": "2025-10-12T03:13:37Z"
+      }
+    ]
+  }
+]
