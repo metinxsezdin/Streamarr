@@ -12,8 +12,8 @@
         "version": "0.1.1",
         "targetAbi": "10.9.0.0",
         "sourceUrl": "https://github.com/metinxsezdin/Streamarr/releases/download/v0.1.1/StreamarrPlugin.zip",
-        "checksum": "sha256:7fcd425f4867ad3368de014faaf0d3897d88d86cd1aa4ba9c660277478d1cf5f",
-        "timestamp": "2025-10-12T03:13:37Z"
+        "checksum": "6fa8fd6fd3d9a49b0315b4943c61e318",
+        "timestamp": "2025-10-12T03:17:24Z"
       }
     ]
   }
