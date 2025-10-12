@@ -1,345 +1,88 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset=\"utf-8\" />
-    <title>Streamarr Settings</title>
-    <style>
-        .streamarrConfigurationPage .contentPrimary {
-            max-width: 720px;
-            margin: 1.5em auto;
-        }
-
-        .streamarrConfigurationPage .sectionTitle {
-            font-size: 1.5em;
-            margin-bottom: 1em;
-        }
-
-        .streamarrConfigurationPage .fieldDescription {
-            font-size: 0.9em;
-            color: #888;
-        }
-
-        .streamarrConfigurationPage .sectionDivider {
-            margin: 2em 0 1em;
-            border-top: 1px solid rgba(255, 255, 255, 0.12);
-            padding-top: 1em;
-        }
-
-        .streamarrConfigurationPage .healthStatus {
-            padding: 1em;
-            border-radius: 4px;
-            margin-top: 0.5em;
-        }
-
-        .streamarrConfigurationPage .checkboxGroup {
-            display: flex;
-            flex-direction: column;
-            gap: 0.4em;
-            margin-top: 0.5em;
-        }
-
-        .streamarrConfigurationPage .checkboxGroup label {
-            display: flex;
-            align-items: center;
-            gap: 0.6em;
-            font-weight: 500;
-        }
-
-        .streamarrConfigurationPage .healthStatus.ok {
-            background: #1f5c33;
-            color: #d6ffe7;
-        }
-
-        .streamarrConfigurationPage .healthStatus.error {
-            background: #5c231f;
-            color: #ffd6d6;
-        }
-
-    </style>
+    <meta charset="utf-8">
+    <title>Streamarr</title>
 </head>
 <body>
-    <div data-role=\"page\" class=\"page type-interior pluginConfigurationPage streamarrConfigurationPage\" data-requires=\"dashboard\">
-        <div data-role=\"content\">
-            <div class=\"contentPrimary\">
-                <div class=\"sectionTitle\">Streamarr Resolver</div>
-                <form class=\"streamarrConfigForm\">
-                    <div class=\"inputContainer\">
-                        <label class=\"inputLabel\" for=\"resolverBaseUrl\">Resolver API URL</label>
-                        <input id=\"resolverBaseUrl\" name=\"resolverBaseUrl\" type=\"text\" required />
-                        <div class=\"fieldDescription\">
-                            Example: http://127.0.0.1:5055
-                        </div>
+    <div id="StreamarrConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="StreamarrConfigForm">
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="resolverBaseUrl">Resolver API URL</label>
+                        <input id="resolverBaseUrl" name="resolverBaseUrl" type="text" is="emby-input" required />
+                        <div class="fieldDescription">Example: http://127.0.0.1:5055</div>
                     </div>
 
-                    <div class=\"inputContainer\">
-                        <label class=\"inputLabel\" for=\"apiKey\">API Key</label>
-                        <input id=\"apiKey\" name=\"apiKey\" type=\"text\" />
-                        <div class=\"fieldDescription\">
-                            (Optional)
-                        </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="apiKey">API Key</label>
+                        <input id="apiKey" name="apiKey" type="text" is="emby-input" />
+                        <div class="fieldDescription">(Optional)</div>
                     </div>
 
-                    <div class=\"sectionDivider\">
-                        <div class=\"sectionTitle\">Advanced Settings</div>
-
-                        <div class=\"inputContainer\">
-                            <label class=\"inputLabel\">Enabled Providers</label>
-                            <div id=\"providerOptions\" class=\"checkboxGroup\"></div>
-                            <div class=\"fieldDescription\">
-                                Choose which streaming providers Streamarr should expose to Jellyfin.
-                            </div>
-                        </div>
-
-                        <div class=\"inputContainer\">
-                            <label class=\"inputLabel\" for=\"catalogCacheMinutes\">Catalog Cache (minutes)</label>
-                            <input id=\"catalogCacheMinutes\" name=\"catalogCacheMinutes\" type=\"number\" min=\"1\" max=\"1440\" />
-                            <div class=\"fieldDescription\">
-                                Between 1 and 1440. Select the option below to disable caching.
-                            </div>
-                        </div>
-
-                        <div class=\"checkboxContainer\">
-                            <label>
-                                <input id=\"disableCatalogCache\" name=\"disableCatalogCache\" type=\"checkbox\" />
-                                Disable catalog cache (refresh on every request)
-                            </label>
-                        </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="catalogCacheMinutes">Catalog Cache (minutes)</label>
+                        <input id="catalogCacheMinutes" name="catalogCacheMinutes" type="number" min="1" max="1440" is="emby-input" />
+                        <div class="fieldDescription">Set how long the resolver catalog should be cached.</div>
                     </div>
 
-                    <div class=\"sectionDivider\">
-                        <div class=\"sectionTitle\">Health Status</div>
-                        <button type=\"button\" id=\"healthCheckButton\" class=\"raised button-submit block\">Run Health Check</button>
-                        <div id=\"healthStatus\" class=\"healthStatus\" hidden></div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label" for="disableCatalogCache">
+                            <input id="disableCatalogCache" name="disableCatalogCache" type="checkbox" is="emby-checkbox" />
+                            <span>Disable catalog cache</span>
+                        </label>
+                        <div class="fieldDescription">When enabled, the catalog is refreshed on every request.</div>
                     </div>
 
-                    <button type=\"submit\" class=\"raised button-submit block\">Save Settings</button>
+                    <button is="emby-button" type="submit" class="raised button-submit block">
+                        <span>Save Settings</span>
+                    </button>
                 </form>
             </div>
         </div>
     </div>
 
-    <script type=\"text/javascript\">
-        (function () {
-            const pluginId = \"68c71f7d-a14e-4f21-9e10-7c02f51ae7b0\";
-            const providers = [
-                { key: \"dizibox\", label: \"Dizibox (Series & Episodes)\" },
-                { key: \"hdfilm\", label: \"HDFilm (Movies)\" }
-            ];
+    <script type="text/javascript">
+        var StreamarrConfig = {
+            pluginUniqueId: "68c71f7d-a14e-4f21-9e10-7c02f51ae7b0"
+        };
 
-            const form = document.querySelector(\".streamarrConfigForm\");
-            const resolverInput = document.querySelector(\"#resolverBaseUrl\");
-            const apiKeyInput = document.querySelector(\"#apiKey\");
-            const cacheMinutesInput = document.querySelector(\"#catalogCacheMinutes\");
-            const disableCacheInput = document.querySelector(\"#disableCatalogCache\");
-            const providerContainer = document.querySelector(\"#providerOptions\");
-            const healthButton = document.querySelector(\"#healthCheckButton\");
-            const healthStatusBox = document.querySelector(\"#healthStatus\");
-
-            function sanitizeBaseUrl() {
-                const value = (resolverInput.value || \"\").trim();
-                if (!value) {
-                    return \"\";
-                }
-                return value.replace(/\s+/g, \"\");
-            }
-
-            function renderProviders(selectedProviders) {
-                if (!providerContainer) {
-                    return;
-                }
-
-                const normalizedSelections = Array.isArray(selectedProviders)
-                    ? selectedProviders
-                        .map(p => (p ?? \"\").trim().toLowerCase())
-                        .filter(Boolean)
-                    : [];
-
-                const selectionSet = normalizedSelections.length > 0
-                    ? new Set(normalizedSelections)
-                    : new Set(providers.map(p => p.key));
-
-                const options = [...providers];
-                const knownKeys = new Set(providers.map(p => p.key));
-
-                normalizedSelections.forEach(value => {
-                    if (!knownKeys.has(value)) {
-                        options.push({ key: value, label: value });
-                        knownKeys.add(value);
-                    }
-                });
-
-                providerContainer.innerHTML = \"\";
-                options.forEach(provider => {
-                    const label = document.createElement(\"label\");
-                    const checkbox = document.createElement(\"input\");
-                    checkbox.type = \"checkbox\";
-                    checkbox.value = provider.key;
-                    checkbox.checked = selectionSet.has(provider.key);
-
-                    const span = document.createElement(\"span\");
-                    span.textContent = provider.label;
-
-                    label.appendChild(checkbox);
-                    label.appendChild(span);
-                    providerContainer.appendChild(label);
-                });
-            }
-
-            function getSelectedProviders() {
-                if (!providerContainer) {
-                    return [];
-                }
-
-                return Array.from(providerContainer.querySelectorAll(\"input[type='checkbox']\"))
-                    .filter(input => input.checked)
-                    .map(input => input.value);
-            }
-
-            function setCacheInputState() {
-                if (!cacheMinutesInput || !disableCacheInput) {
-                    return;
-                }
-
-                cacheMinutesInput.disabled = disableCacheInput.checked;
-            }
-
-            function setHealthStatus(message, style) {
-                if (!healthStatusBox) {
-                    return;
-                }
-
-                healthStatusBox.hidden = false;
-                healthStatusBox.className = \"healthStatus\";
-                if (style) {
-                    healthStatusBox.classList.add(style);
-                }
-                healthStatusBox.textContent = message;
-            }
-
-            function refreshHealthStatus() {
-                if (!healthStatusBox) {
-                    return Promise.resolve();
-                }
-
-                const baseUrl = sanitizeBaseUrl();
-                if (!baseUrl) {
-                    setHealthStatus(\"Resolver URL is not configured.\", \"error\");
-                    return Promise.resolve();
-                }
-
-                setHealthStatus(\"Checking resolver health...\", null);
-
-                const target = baseUrl.replace(/\/+$/, \"\") + \"/health\";
-                return fetch(target, { method: \"GET\", cache: \"no-store\" })
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(\"HTTP \" + response.status);
-                        }
-                        return response.json().catch(() => ({}));
-                    })
-                    .then(data => {
-                        const status = typeof data.status === \"string\" ? data.status.toLowerCase() : \"\";
-                        const cacheSize = typeof data.cache_size === \"number\"
-                            ? data.cache_size
-                            : (typeof data.cacheSize === \"number\" ? data.cacheSize : undefined);
-
-                        if (status === \"ok\") {
-                            const summary = cacheSize != null
-                                ? \"Resolver healthy (cache size: \" + cacheSize + \")\"
-                                : \"Resolver healthy.\";
-                            setHealthStatus(summary, \"ok\");
-                        } else if (status) {
-                            setHealthStatus(\"Resolver warning: \" + data.status, \"error\");
-                        } else {
-                            setHealthStatus(\"Resolver responded but status is unknown.\", \"error\");
-                        }
-                    })
-                    .catch(err => {
-                        setHealthStatus(\"Connection error: \" + err.message, \"error\");
-                    });
-            }
-
-            function loadConfig() {
-                Dashboard.showLoadingMsg();
-                ApiClient.getPluginConfiguration(pluginId)
-                    .then(config => {
-                        resolverInput.value = config.ResolverBaseUrl || \"\";
-                        apiKeyInput.value = config.ApiKey || \"\";
-
-                        const minutes = parseInt(config.CatalogCacheMinutes, 10);
-                        if (cacheMinutesInput) {
-                            cacheMinutesInput.value = Number.isFinite(minutes) && minutes > 0 ? minutes : 10;
-                        }
-                        if (disableCacheInput) {
-                            disableCacheInput.checked = !!config.DisableCatalogCache;
-                        }
-
-                        renderProviders(config.EnabledProviders || []);
-                        setCacheInputState();
-                        return refreshHealthStatus();
-                    })
-                    .catch(error => {
-                        console.error(\"Streamarr config load failed\", error);
-                        Dashboard.alert({ message: \"Failed to load settings: \" + error.message });
-                    })
-                    .finally(Dashboard.hideLoadingMsg);
-            }
-
-            function saveConfig(event) {
-                event.preventDefault();
-                Dashboard.showLoadingMsg();
-
-                const minutes = parseInt(cacheMinutesInput ? cacheMinutesInput.value : \"\", 10);
-                const normalizedMinutes = Number.isFinite(minutes) && minutes > 0 ? minutes : 10;
-                const enabledProviders = getSelectedProviders();
-
-                if (enabledProviders.length === 0) {
-                    Dashboard.hideLoadingMsg();
-                    Dashboard.alert({ message: \"Select at least one streaming provider.\" });
-                    return;
-                }
-
-                const options = {
-                    ResolverBaseUrl: sanitizeBaseUrl(),
-                    ApiKey: (apiKeyInput.value || \"\").trim(),
-                    CatalogCacheMinutes: normalizedMinutes,
-                    DisableCatalogCache: !!(disableCacheInput && disableCacheInput.checked),
-                    EnabledProviders: enabledProviders
-                };
-
-                ApiClient.updatePluginConfiguration(pluginId, options)
-                    .then(result => {
-                        Dashboard.processPluginConfigurationUpdateResult(result);
-                        return refreshHealthStatus();
-                    })
-                    .catch(error => {
-                        Dashboard.alert({ message: \"Save failed: \" + (error?.message || error) });
-                    })
-                    .finally(Dashboard.hideLoadingMsg);
-            }
-
-            document.addEventListener(\"pagebeforeshow\", function (event) {
-                if (event.target.classList.contains(\"streamarrConfigurationPage\")) {
-                    loadConfig();
-                }
+        document.querySelector('#StreamarrConfigPage').addEventListener('pageshow', function () {
+            Dashboard.showLoadingMsg();
+            ApiClient.getPluginConfiguration(StreamarrConfig.pluginUniqueId).then(function (config) {
+                document.querySelector('#resolverBaseUrl').value = config.ResolverBaseUrl || '';
+                document.querySelector('#apiKey').value = config.ApiKey || '';
+                document.querySelector('#catalogCacheMinutes').value = config.CatalogCacheMinutes || 10;
+                document.querySelector('#disableCatalogCache').checked = !!config.DisableCatalogCache;
+                Dashboard.hideLoadingMsg();
+            }).catch(function (err) {
+                console.error('Streamarr config load failed', err);
+                Dashboard.alert({ message: 'Failed to load settings: ' + err.message });
+                Dashboard.hideLoadingMsg();
             });
+        });
 
-            if (disableCacheInput) {
-                disableCacheInput.addEventListener(\"change\", () => {
-                    setCacheInputState();
-                });
-            }
+        document.querySelector('#StreamarrConfigForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            Dashboard.showLoadingMsg();
 
-            if (healthButton) {
-                healthButton.addEventListener(\"click\", () => {
-                    refreshHealthStatus();
-                });
-            }
+            ApiClient.getPluginConfiguration(StreamarrConfig.pluginUniqueId).then(function (config) {
+                config.ResolverBaseUrl = document.querySelector('#resolverBaseUrl').value.trim();
+                config.ApiKey = document.querySelector('#apiKey').value.trim();
+                config.CatalogCacheMinutes = parseInt(document.querySelector('#catalogCacheMinutes').value, 10) || 10;
+                config.DisableCatalogCache = document.querySelector('#disableCatalogCache').checked;
+                config.EnabledProviders = config.EnabledProviders || [];
 
-            if (form) {
-                form.addEventListener(\"submit\", saveConfig);
-            }
-        })();
+                return ApiClient.updatePluginConfiguration(StreamarrConfig.pluginUniqueId, config);
+            }).then(function (result) {
+                Dashboard.processPluginConfigurationUpdateResult(result);
+            }).catch(function (err) {
+                Dashboard.alert({ message: 'Save failed: ' + (err && err.message ? err.message : err) });
+            }).finally(function () {
+                Dashboard.hideLoadingMsg();
+            });
+        });
     </script>
 </body>
 </html>
