@@ -1,9 +1,5 @@
 ﻿<div align="center">
 
-# Streamarr
-
-**Turkish Streaming Resolver Suite for Jellyfin**
-
 [![Streamarr Preview](images/Streamarr.png)](images/Streamarr.png)
 
 </div>
