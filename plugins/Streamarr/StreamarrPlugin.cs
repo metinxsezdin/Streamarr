@@ -13,8 +13,6 @@ public class StreamarrPlugin : BasePlugin<StreamarrPluginConfiguration>, IHasWeb
 
     public override Guid Id { get; } = new("68C71F7D-A14E-4F21-9E10-7C02F51AE7B0");
 
-    public string ConfigurationPageName => "streamarr";
-
     public StreamarrPlugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer) : base(applicationPaths, xmlSerializer)
     {
         Instance = this;
@@ -24,7 +22,7 @@ public class StreamarrPlugin : BasePlugin<StreamarrPluginConfiguration>, IHasWeb
     {
         yield return new PluginPageInfo
         {
-            Name = ConfigurationPageName,
+            Name = Name,
             EmbeddedResourcePath = $"{GetType().Namespace}.configPage.html"
         };
     }
