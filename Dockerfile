@@ -10,7 +10,8 @@ COPY data data
 
 ENV PYTHONPATH=/app/backend \
     CATALOG_PATH=/app/data/catalog.json \
-    PROXY_BASE_URL=
+    PROXY_BASE_URL= \
+    RESOLVER_PORT=5055
 
 EXPOSE 5055
 

@@ -4,7 +4,7 @@ services:
   resolver:
     build: .
     ports:
-      - "5051:5051"
+      - "5055:5055"
     environment:
       TMDB_KEY: "${TMDB_KEY:-}"
       PROXY_BASE_URL: "${PROXY_BASE_URL:-}"

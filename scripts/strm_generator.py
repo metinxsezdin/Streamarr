@@ -28,6 +28,16 @@ def parse_args() -> argparse.Namespace:
         help="Directory to place STRM files",
     )
     parser.add_argument(
+        "--movies-output",
+        type=Path,
+        help="Override directory for movie STRM files (defaults to --output)",
+    )
+    parser.add_argument(
+        "--shows-output",
+        type=Path,
+        help="Override directory for series/episode STRM files (defaults to --output)",
+    )
+    parser.add_argument(
         "--resolver-base",
         type=str,
         default="http://127.0.0.1:5055",
@@ -40,7 +50,8 @@ def sanitize_filename(name: str) -> str:
     normalized = unicodedata.normalize("NFKD", name)
     ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
     ascii_name = ascii_name.strip()
-    return "".join(c if c.isalnum() or c in " -._" else "_" for c in ascii_name)
+    sanitized = "".join(c if c.isalnum() or c in " -._" else "_" for c in ascii_name)
+    return sanitized.rstrip(" .")
 
 
 def build_strm_content(resolver_base: str, entry_id: str) -> str:
@@ -51,10 +62,14 @@ def build_strm_content(resolver_base: str, entry_id: str) -> str:
 def main() -> None:
     args = parse_args()
     catalog_data = json.loads(args.catalog.read_text(encoding="utf-8"))
-    output_dir = args.output
-    output_dir.mkdir(parents=True, exist_ok=True)
+    movies_dir = (args.movies_output or args.output).resolve()
+    shows_dir = (args.shows_output or args.output).resolve()
+    movies_dir.mkdir(parents=True, exist_ok=True)
+    shows_dir.mkdir(parents=True, exist_ok=True)
 
     count = 0
+    movie_count = 0
+    episode_count = 0
     for entry in catalog_data:
         title = entry.get("title") or entry.get("original_title") or "Untitled"
         subtitle = entry.get("subtitle") or ""
@@ -63,18 +78,22 @@ def main() -> None:
 
         if entry_type == "episode" and subtitle:
             filename = sanitize_filename(f"{title} - {subtitle}.strm")
-            series_dir = output_dir / sanitize_filename(title)
+            series_dir = shows_dir / sanitize_filename(title)
             series_dir.mkdir(parents=True, exist_ok=True)
             target_path = series_dir / filename
+            episode_count += 1
         else:
             filename = sanitize_filename(f"{title}.strm")
-            target_path = output_dir / filename
+            target_path = movies_dir / filename
+            movie_count += 1
 
         content = build_strm_content(args.resolver_base, entry_id)
         target_path.write_text(content + "\n", encoding="utf-8")
         count += 1
 
-    print(f"[strm] generated {count} files in {output_dir}")
+    print(f"[strm] generated {count} files ({movie_count} movies, {episode_count} episodes)")
+    print(f"[strm] movie output:  {movies_dir}")
+    print(f"[strm] series output: {shows_dir}")
 
 
 if __name__ == "__main__":

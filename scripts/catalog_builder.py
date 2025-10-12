@@ -160,6 +160,16 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("TMDB_KEY"),
         help="TMDB API key (falls back to TMDB_KEY env var)",
     )
+    parser.add_argument(
+        "--max-hdfilm",
+        type=int,
+        help="Maximum number of HDFilm (movie) entries to include",
+    )
+    parser.add_argument(
+        "--max-dizibox",
+        type=int,
+        help="Maximum number of Dizibox (episode) entries to include",
+    )
     return parser.parse_args()
 
 
@@ -170,19 +180,46 @@ def main() -> None:
     dizibox_urls = load_urls(args.dizibox_source)
 
     entries: List[CatalogEntry] = []
-    entries.extend(build_hdfilm_catalog(hdfilm_urls))
-    entries.extend(build_dizibox_catalog(dizibox_urls))
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+
+    def persist_progress() -> None:
+        payload = [entry.to_dict() for entry in entries]
+        tmp_path = args.output.with_suffix(args.output.suffix + ".tmp")
+        tmp_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        tmp_path.replace(args.output)
+
+    hdfilm_entries = build_hdfilm_catalog(hdfilm_urls)
+    if args.max_hdfilm is not None:
+        if args.max_hdfilm <= 0:
+            hdfilm_entries = []
+        else:
+            hdfilm_entries = hdfilm_entries[: args.max_hdfilm]
+
+    for entry in hdfilm_entries:
+        entries.append(entry)
+        persist_progress()
+
+    dizibox_entries = build_dizibox_catalog(dizibox_urls)
+    if args.max_dizibox is not None:
+        if args.max_dizibox <= 0:
+            dizibox_entries = []
+        else:
+            dizibox_entries = dizibox_entries[: args.max_dizibox]
+
+    for entry in dizibox_entries:
+        entries.append(entry)
+        persist_progress()
 
     if fetcher.enabled:
         for entry in entries:
             metadata = fetcher.enrich(entry.title, entry.type, entry.site)
-            entry.apply_metadata(metadata)
+            if metadata:
+                entry.apply_metadata(metadata)
+                persist_progress()
     else:
         print("[catalog] TMDB key missing; skipping metadata enrichment")
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    data = [entry.to_dict() for entry in entries]
-    args.output.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    persist_progress()
     print(f"[catalog] wrote {len(entries)} entries to {args.output}")
 
 

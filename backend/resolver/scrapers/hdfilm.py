@@ -21,11 +21,14 @@ if hasattr(sys.stdout, "reconfigure"):
 class HDFilmScraper:
     """Scraper for HDFilmCehennemi movies."""
 
+    DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0'
+
     def __init__(self, headless: bool = True) -> None:
         self.headless = headless
         self.master_url: Optional[str] = None
         self.embed_url: Optional[str] = None
         self.last_page_url: Optional[str] = None
+        self.user_agent: str = self.DEFAULT_USER_AGENT
 
     def auto_start_player(self, page) -> bool:
         """Attempt to trigger the player without manual interaction."""
@@ -225,7 +228,7 @@ class HDFilmScraper:
         with sync_playwright() as p:
             browser = p.firefox.launch(headless=self.headless)
             context = browser.new_context(
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+                user_agent=self.user_agent,
                 locale='tr-TR'
             )
             page = context.new_page()
@@ -307,7 +310,8 @@ class HDFilmScraper:
             'embed_url': embed_url,
             'master_url': self.master_url,
             'variants': variants,
-            'raw_playlist': content
+            'raw_playlist': content,
+            'user_agent': self.user_agent
         }
 
 

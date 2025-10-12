@@ -46,6 +46,8 @@ def resolve_stream(
     if not result:
         raise RuntimeError(f"Failed to resolve stream for site={site} url={url}")
 
+    result.setdefault("page_url", url)
+
     return {
         "site": site,
         "url": url,

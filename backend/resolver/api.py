@@ -22,6 +22,7 @@ TOKEN_TTL_SECONDS = 5 * 60
 PROXY_BASE_URL = os.environ.get("PROXY_BASE_URL")
 ROOT_DIR = Path(__file__).resolve().parents[2]
 CATALOG_PATH = Path(os.environ.get("CATALOG_PATH", ROOT_DIR / "data/catalog.json"))
+RESOLVER_PORT = int(os.environ.get("RESOLVER_PORT", os.environ.get("PORT", "5055")))
 _token_cache: Dict[str, Dict] = {}
 _catalog_index: Dict[str, Dict] = load_catalog(CATALOG_PATH)
 
@@ -39,6 +40,18 @@ def _store_token(data: Dict) -> Tuple[str, float]:
     expires_at = time.time() + TOKEN_TTL_SECONDS
     _token_cache[token] = {"data": data, "expires_at": expires_at}
     return token, expires_at
+
+
+def _append_http_headers(url: str, headers: Dict[str, str]) -> str:
+    if not url or not headers:
+        return url
+
+    parts = [url.rstrip("|")]
+    for key, value in headers.items():
+        if value:
+            encoded_value = quote_plus(value, safe="/:?=@-._~")
+            parts.append(f"{key}={encoded_value}")
+    return "|".join(parts)
 
 
 def _resolve_stream_url(site: str, result: Dict) -> str:
@@ -60,6 +73,10 @@ def _apply_proxy(site: str, stream_url: str, result: Dict) -> str:
         return f"{proxy_base}/stream/{encoded}"
     if site == "dizibox":
         return result.get("proxy_url") or stream_url
+    if site == "hdfilm":
+        referer = result.get("embed_url") or result.get("page_url") or "https://www.hdfilmcehennemi.la/"
+        user_agent = result.get("user_agent") or "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0"
+        return _append_http_headers(stream_url, {"Referer": referer, "User-Agent": user_agent})
     return stream_url
 
 
@@ -188,4 +205,4 @@ def create_app() -> Flask:
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5055, debug=False)
+    app.run(host="0.0.0.0", port=RESOLVER_PORT, debug=False)
