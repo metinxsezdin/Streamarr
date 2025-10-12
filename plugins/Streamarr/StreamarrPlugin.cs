@@ -1,4 +1,4 @@
-﻿using MediaBrowser.Common.Configuration;
+using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
@@ -23,7 +23,7 @@ public class StreamarrPlugin : BasePlugin<StreamarrPluginConfiguration>, IHasWeb
         yield return new PluginPageInfo
         {
             Name = Name,
-            EmbeddedResourcePath = $"{GetType().Namespace}.configPage.html"
+            EmbeddedResourcePath = $"{GetType().Namespace}.Configuration.configPage.html" 
         };
     }
 }
