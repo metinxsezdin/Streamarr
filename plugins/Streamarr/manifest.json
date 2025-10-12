@@ -1,0 +1,21 @@
+[
+  {
+    "name": "Streamarr",
+    "guid": "68c71f7d-a14e-4f21-9e10-7c02f51ae7b0",
+    "category": "General",
+    "description": "Streamarr resolver integration for Jellyfin.",
+    "overview": "Provides resolver-backed metadata and playback for Turkish streaming sources.",
+    "owner": "metinxsezdin",
+    "imageUrl": "https://metinxsezdin.github.io/streamarr-jellyfin/icon.png",
+    "versions": [
+      {
+        "version": "0.1.0",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/metinxsezdin/Streamarr/releases/download/v0.1.0/StreamarrPlugin.zip",
+        "checksum": "e46dddefebb068c0d64a155812141212",
+        "timestamp": "2025-10-11T14:40:00Z",
+        "changelog": "Initial preview release."
+      }
+    ]
+  }
+]

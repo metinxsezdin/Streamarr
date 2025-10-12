@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Streamarr Settings</title>
+    <style>
+        .streamarrConfigurationPage .contentPrimary {
+            max-width: 640px;
+            margin: 1.5em auto;
+        }
+
+        .streamarrConfigurationPage .sectionTitle {
+            font-size: 1.5em;
+            margin-bottom: 1em;
+        }
+    </style>
+</head>
+<body>
+    <div data-role="page" class="page type-interior pluginConfigurationPage streamarrConfigurationPage" data-requires="dashboard">
+        <div data-role="content">
+            <div class="contentPrimary">
+                <div class="sectionTitle">Streamarr Resolver</div>
+                <form class="streamarrConfigForm">
+                    <div class="inputContainer">
+                        <label class="inputLabel" for="resolverBaseUrl">Resolver API URL</label>
+                        <input id="resolverBaseUrl" name="resolverBaseUrl" type="text" required />
+                        <div class="fieldDescription">
+                            Örnek: http://127.0.0.1:5055
+                        </div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <label class="inputLabel" for="apiKey">API Key</label>
+                        <input id="apiKey" name="apiKey" type="text" />
+                        <div class="fieldDescription">
+                            (Opsiyonel)
+                        </div>
+                    </div>
+
+                    <button type="submit" class="raised button-submit block">Kaydet</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            const pluginId = "68c71f7d-a14e-4f21-9e10-7c02f51ae7b0";
+
+            function loadConfig() {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(config => {
+                    document.querySelector("#resolverBaseUrl").value = config.ResolverBaseUrl || "";
+                    document.querySelector("#apiKey").value = config.ApiKey || "";
+                    Dashboard.hideLoadingMsg();
+                });
+            }
+
+            function saveConfig(e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+
+                const options = {
+                    ResolverBaseUrl: document.querySelector("#resolverBaseUrl").value.trim(),
+                    ApiKey: document.querySelector("#apiKey").value.trim()
+                };
+
+                ApiClient.updatePluginConfiguration(pluginId, options)
+                    .then(Dashboard.processPluginConfigurationUpdateResult)
+                    .finally(Dashboard.hideLoadingMsg);
+            }
+
+            document.addEventListener("pagebeforeshow", function (e) {
+                if (e.target.classList.contains("streamarrConfigurationPage")) {
+                    loadConfig();
+                }
+            });
+
+            document.querySelector(".streamarrConfigForm").addEventListener("submit", saveConfig);
+        })();
+    </script>
+</body>
+</html>
