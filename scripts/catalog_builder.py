@@ -1,17 +1,6 @@
 #!/usr/bin/env python3
 """
-Builds a minimal metadata catalog for STRM generation.
-
-Generates a JSON array with entries containing:
-    {
-        "id": "dizibox:show-slug:s01e01",
-        "site": "dizibox",
-        "title": "All Creatures Great and Small",
-        "subtitle": "Sezon 6 Bölüm 3",
-        "url": "https://www.dizibox.live/all-creatures-great-and-small-6-sezon-3-bolum-izle/",
-        "year": 0,
-        "type": "episode"
-    }
+Build a minimal metadata catalog for STRM generation.
 """
 from __future__ import annotations
 
@@ -19,11 +8,15 @@ import argparse
 import json
 import os
 import re
-from dataclasses import dataclass, field
+import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-from metadata_fetcher import MetadataFetcher
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.append(str(ROOT_DIR / "backend"))
+
+from resolver.metadata_fetcher import MetadataFetcher  # noqa: E402
 
 
 @dataclass
@@ -34,7 +27,7 @@ class CatalogEntry:
     subtitle: str
     url: str
     year: int
-    type: str  # "movie" or "episode"
+    type: str
     original_title: str = ""
     poster: Optional[str] = None
     backdrop: Optional[str] = None
@@ -72,11 +65,9 @@ class CatalogEntry:
 
 
 DIZIBOX_EPISODE_RE = re.compile(
-    r"https://www\.dizibox\.live/(?P<slug>.+)-(?P<season>\d+)-sezon-(?P<episode>\d+)-bolum(?:-.*)?/?"  # noqa: E501
+    r"https://www\.dizibox\.live/(?P<slug>.+)-(?P<season>\d+)-sezon-(?P<episode>\d+)-bolum(?:-.*)?/?"
 )
-HDFILM_MOVIE_RE = re.compile(
-    r"https://www\.hdfilmcehennemi\.la/(?P<slug>[-a-z0-9]+)/?"
-)
+HDFILM_MOVIE_RE = re.compile(r"https://www\.hdfilmcehennemi\.la/(?P<slug>[-a-z0-9]+)/?")
 
 
 def load_urls(file_path: Path) -> Iterable[str]:
@@ -99,7 +90,6 @@ def build_dizibox_catalog(urls: Iterable[str]) -> List[CatalogEntry]:
         slug = match.group("slug")
         season = int(match.group("season"))
         episode = int(match.group("episode"))
-        # title guess: replace dashes with spaces, title case
         title_guess = " ".join(slug.split("-")).title()
         entry_id = f"dizibox:{slug}:s{season:02d}e{episode:02d}"
         subtitle = f"Sezon {season} Bölüm {episode}"
@@ -149,19 +139,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--hdfilm-source",
         type=Path,
-        default=Path("data/hdfilm_links_sample.json"),
+        default=ROOT_DIR / "data/hdfilm_links_sample.json",
         help="Path to JSON list of HDFilm URLs",
     )
     parser.add_argument(
         "--dizibox-source",
         type=Path,
-        default=Path("data/dizibox_links_sample.json"),
+        default=ROOT_DIR / "data/dizibox_links_sample.json",
         help="Path to JSON list of Dizibox URLs",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("data/catalog.json"),
+        default=ROOT_DIR / "data/catalog.json",
         help="Output catalog JSON path",
     )
     parser.add_argument(

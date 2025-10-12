@@ -1,22 +1,5 @@
-#!/usr/bin/env python3
 """
 Flask API exposing the on-demand stream resolver for integration with Jellyfin.
-
-Endpoints:
-    GET /health
-        Simple heartbeat check.
-    POST /resolve
-        Resolve a given streaming page URL. Body JSON:
-            {
-                "url": "...",              # required
-                "site": "dizibox|hdfilm",  # optional hint
-                "headed": false,           # optional debug flag
-                "verbose": false           # include scraper logs
-            }
-        Response contains a temporary token and metadata.
-    GET /stream/<token>
-        Retrieve cached stream details. By default responds with HTTP redirect
-        to the proxied stream URL. Append `?format=json` for metadata.
 """
 from __future__ import annotations
 
@@ -30,14 +13,15 @@ from urllib.parse import quote_plus
 
 from flask import Flask, jsonify, redirect, request
 
-from stream_resolver import resolve_stream, SUPPORTED_SITES
-from catalog_store import load_catalog, get_entry
+from .stream_resolver import resolve_stream, SUPPORTED_SITES
+from .catalog import load_catalog, get_entry
 
 app = Flask(__name__)
 
-TOKEN_TTL_SECONDS = 5 * 60  # 5 minutes
+TOKEN_TTL_SECONDS = 5 * 60
 PROXY_BASE_URL = os.environ.get("PROXY_BASE_URL")
-CATALOG_PATH = Path(os.environ.get("CATALOG_PATH", Path(__file__).resolve().parent / "data/catalog.json"))
+ROOT_DIR = Path(__file__).resolve().parents[2]
+CATALOG_PATH = Path(os.environ.get("CATALOG_PATH", ROOT_DIR / "data/catalog.json"))
 _token_cache: Dict[str, Dict] = {}
 _catalog_index: Dict[str, Dict] = load_catalog(CATALOG_PATH)
 
@@ -82,6 +66,11 @@ def _apply_proxy(site: str, stream_url: str, result: Dict) -> str:
 @app.get("/health")
 def health() -> tuple[dict, int]:
     return {"status": "ok", "cache_size": len(_token_cache)}, 200
+
+
+@app.get("/catalog")
+def catalog_route():
+    return jsonify(list(_catalog_index.values())), 200
 
 
 @app.post("/resolve")

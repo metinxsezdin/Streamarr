@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 """
-Lightweight TMDB metadata fetcher helper.
+TMDB metadata fetcher helper.
 """
 from __future__ import annotations
 
@@ -11,7 +10,6 @@ from typing import Dict, Optional
 import requests
 from dotenv import load_dotenv
 
-# Attempt to load .env from project root
 load_dotenv()
 
 

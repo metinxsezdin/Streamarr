@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """
 Generate .strm files from catalog entries.
-
-Each STRM file contains the resolver API URL with the catalog entry ID.
 """
 from __future__ import annotations
 
@@ -12,19 +10,21 @@ import unicodedata
 from pathlib import Path
 from urllib.parse import quote
 
+ROOT_DIR = Path(__file__).resolve().parent.parent
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate STRM files from catalog JSON.")
     parser.add_argument(
         "--catalog",
         type=Path,
-        default=Path("data/catalog.json"),
+        default=ROOT_DIR / "data/catalog.json",
         help="Path to catalog JSON",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("output/strm"),
+        default=ROOT_DIR / "output/strm",
         help="Directory to place STRM files",
     )
     parser.add_argument(
@@ -79,4 +79,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-from urllib.parse import quote

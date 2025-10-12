@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """
-Link collector for supported Turkish streaming sites.
-
-Usage examples:
-    python collect_links.py --site hdfilm --limit 2
-    python collect_links.py --site dizibox --max-shows 50
+Collect page URLs from supported Turkish streaming sites.
 """
 from __future__ import annotations
 
@@ -21,6 +17,8 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 from playwright.sync_api import sync_playwright
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
 
 HDFILM_BASE = "https://www.hdfilmcehennemi.la"
 HDFILM_SITEMAP_INDEX = f"{HDFILM_BASE}/sitemap.xml"
@@ -112,10 +110,7 @@ def extract_hdfilm_urls(session: requests.Session, sitemap_urls: Iterable[str]) 
             if not path or "/" in path:
                 continue
             slug = path.lower()
-            if (
-                slug in exclude_prefixes
-                or slug.startswith(("category-", "tur-", "etiket-", "yil-"))
-            ):
+            if slug in exclude_prefixes or slug.startswith(("category-", "tur-", "etiket-", "yil-")):
                 continue
             allowed.add(loc)
     return allowed
@@ -202,24 +197,9 @@ def write_output(result: CollectionResult, output_path: Path) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Collect page URLs from supported sites.")
-    parser.add_argument(
-        "--site",
-        choices=["hdfilm", "dizibox"],
-        required=True,
-        help="Site to scrape",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Optional limit (for hdfilm: number of sitemap files)",
-    )
-    parser.add_argument(
-        "--max-shows",
-        type=int,
-        default=None,
-        help="Optional cap on number of Dizibox shows to scan",
-    )
+    parser.add_argument("--site", choices=["hdfilm", "dizibox"], required=True, help="Site to scrape")
+    parser.add_argument("--limit", type=int, default=None, help="Optional limit for HDFilm sitemaps")
+    parser.add_argument("--max-shows", type=int, default=None, help="Optional cap on number of Dizibox shows")
     parser.add_argument(
         "--output",
         type=Path,
@@ -235,11 +215,8 @@ def main() -> None:
         urls = sorted(collect_hdfilm(limit=args.limit))
     else:
         urls = sorted(collect_dizibox_episodes(max_shows=args.max_shows))
-    output_path = (
-        args.output
-        if args.output
-        else Path(__file__).resolve().parent / "data" / f"{args.site}_links.json"
-    )
+
+    output_path = args.output or (ROOT_DIR / "data" / f"{args.site}_links.json")
     write_output(CollectionResult(site=args.site, urls=urls), output_path)
 
 
