@@ -4,6 +4,8 @@
 
 **Turkish Streaming Resolver Suite for Jellyfin**
 
+[![Streamarr Preview](images/Streamarr.png)](images/Streamarr.png)
+
 </div>
 
 Streamarr harvests stream URLs from popular Turkish streaming sites, exposes them through a resolver API, and integrates with Jellyfin via STRM libraries and a native plugin.

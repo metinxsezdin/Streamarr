@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -11,8 +12,6 @@ namespace Streamarr.Plugin;
 
 internal sealed class StreamarrApiClient
 {
-    private static readonly TimeSpan CatalogCacheDuration = TimeSpan.FromMinutes(10);
-
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger _logger;
 
@@ -20,8 +19,11 @@ internal sealed class StreamarrApiClient
     private IReadOnlyList<StreamarrCatalogEntry>? _catalogCache;
     private Dictionary<string, StreamarrCatalogEntry>? _catalogIndex;
     private DateTime _catalogCacheTimestamp;
-    private string? _lastResolverBaseUrl;
-    private string? _lastApiKey;
+    private ResolverClientConfig? _lastConfig;
+    private readonly HashSet<string> _enabledProviders = new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly string[] DefaultProviders = { "dizibox", "hdfilm" };
+    private readonly record struct ResolverClientConfig(string BaseUrl, string? ApiKey, int CacheMinutes, bool DisableCache, string[] Providers);
 
     public StreamarrApiClient(IHttpClientFactory httpClientFactory, ILogger logger)
     {
@@ -67,39 +69,98 @@ internal sealed class StreamarrApiClient
         return baseUrl;
     }
 
-    private (string BaseUrl, string? ApiKey) GetConfigurationSnapshot()
+    private ResolverClientConfig GetConfigurationSnapshot()
     {
         var configuration = StreamarrPlugin.Instance?.Configuration;
         var resolverBase = NormalizeResolverBase(configuration?.ResolverBaseUrl);
         var apiKey = string.IsNullOrWhiteSpace(configuration?.ApiKey) ? null : configuration!.ApiKey!.Trim();
-        return (resolverBase, string.IsNullOrEmpty(apiKey) ? null : apiKey);
+        var cacheMinutes = configuration?.CatalogCacheMinutes ?? 10;
+        if (cacheMinutes < 0)
+        {
+            cacheMinutes = 0;
+        }
+
+        var providers = NormalizeProviders(configuration?.EnabledProviders);
+
+        return new ResolverClientConfig(
+            resolverBase,
+            string.IsNullOrEmpty(apiKey) ? null : apiKey,
+            cacheMinutes,
+            configuration?.DisableCatalogCache ?? false,
+            providers);
     }
 
-    private void EnsureConfigurationSnapshot((string BaseUrl, string? ApiKey) snapshot)
+    private static string[] NormalizeProviders(IEnumerable<string>? providers)
     {
-        if (!string.Equals(_lastResolverBaseUrl, snapshot.BaseUrl, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(_lastApiKey, snapshot.ApiKey, StringComparison.Ordinal))
+        if (providers is null)
+        {
+            return DefaultProviders.ToArray();
+        }
+
+        var normalized = providers
+            .Select(p => (p ?? string.Empty).Trim())
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p.ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return normalized.Length > 0 ? normalized : DefaultProviders.ToArray();
+    }
+
+    private IReadOnlyList<StreamarrCatalogEntry> ApplyProviderFilter(IEnumerable<StreamarrCatalogEntry> entries)
+    {
+        if (_enabledProviders.Count == 0)
+        {
+            return Array.Empty<StreamarrCatalogEntry>();
+        }
+
+        var filtered = entries
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Site) && _enabledProviders.Contains(entry.Site))
+            .ToArray();
+
+        return filtered.Length > 0 ? filtered : Array.Empty<StreamarrCatalogEntry>();
+    }
+
+    private void EnsureConfigurationSnapshot(ResolverClientConfig snapshot)
+    {
+        if (_lastConfig is null || !_lastConfig.Value.Equals(snapshot))
         {
             lock (_cacheLock)
             {
                 _catalogCache = null;
                 _catalogIndex = null;
                 _catalogCacheTimestamp = DateTime.MinValue;
+                _enabledProviders.Clear();
+                foreach (var provider in snapshot.Providers)
+                {
+                    _enabledProviders.Add(provider);
+                }
             }
 
-            _lastResolverBaseUrl = snapshot.BaseUrl;
-            _lastApiKey = snapshot.ApiKey;
+            _lastConfig = snapshot;
         }
     }
 
-    private void SetCatalogCache(IReadOnlyList<StreamarrCatalogEntry> entries)
+    private IReadOnlyList<StreamarrCatalogEntry> SetCatalogCache(IReadOnlyList<StreamarrCatalogEntry> entries)
     {
+        var filtered = ApplyProviderFilter(entries);
         lock (_cacheLock)
         {
-            _catalogCache = entries;
+            _catalogCache = filtered;
             _catalogCacheTimestamp = DateTime.UtcNow;
-            _catalogIndex = BuildCatalogIndex(entries);
+            _catalogIndex = BuildCatalogIndex(filtered);
         }
+        return filtered;
+    }
+
+    private IReadOnlyList<StreamarrCatalogEntry> SetCatalogIndex(IReadOnlyList<StreamarrCatalogEntry> entries)
+    {
+        var filtered = ApplyProviderFilter(entries);
+        lock (_cacheLock)
+        {
+            _catalogIndex = BuildCatalogIndex(filtered);
+        }
+        return filtered;
     }
 
     private void EnsureCatalogIndex()
@@ -129,7 +190,18 @@ internal sealed class StreamarrApiClient
         return index;
     }
 
-    private HttpClient CreateClient((string BaseUrl, string? ApiKey) snapshot)
+    private static TimeSpan GetCatalogCacheDuration(ResolverClientConfig snapshot)
+    {
+        if (snapshot.DisableCache)
+        {
+            return TimeSpan.Zero;
+        }
+
+        var minutes = Math.Clamp(snapshot.CacheMinutes, 1, 1440);
+        return TimeSpan.FromMinutes(minutes);
+    }
+
+    private HttpClient CreateClient(ResolverClientConfig snapshot)
     {
         var client = _httpClientFactory.CreateClient("StreamarrResolver");
         client.BaseAddress = new Uri(snapshot.BaseUrl, UriKind.Absolute);
@@ -146,11 +218,14 @@ internal sealed class StreamarrApiClient
     {
         var snapshot = GetConfigurationSnapshot();
         EnsureConfigurationSnapshot(snapshot);
+        var cacheDuration = GetCatalogCacheDuration(snapshot);
 
         IReadOnlyList<StreamarrCatalogEntry>? cached;
         lock (_cacheLock)
         {
-            if (_catalogCache is not null && DateTime.UtcNow - _catalogCacheTimestamp < CatalogCacheDuration)
+            if (cacheDuration > TimeSpan.Zero
+                && _catalogCache is not null
+                && DateTime.UtcNow - _catalogCacheTimestamp < cacheDuration)
             {
                 cached = _catalogCache;
             }
@@ -173,8 +248,9 @@ internal sealed class StreamarrApiClient
                 .ConfigureAwait(false);
             if (entries is not null)
             {
-                SetCatalogCache(entries);
-                return entries;
+                return cacheDuration > TimeSpan.Zero
+                    ? SetCatalogCache(entries)
+                    : SetCatalogIndex(entries);
             }
         }
         catch (OperationCanceledException)
@@ -186,16 +262,19 @@ internal sealed class StreamarrApiClient
             _logger.LogWarning(ex, "Failed to retrieve catalog from resolver API");
         }
 
-        IReadOnlyList<StreamarrCatalogEntry>? fallback;
-        lock (_cacheLock)
+        if (cacheDuration > TimeSpan.Zero)
         {
-            fallback = _catalogCache;
-        }
+            IReadOnlyList<StreamarrCatalogEntry>? fallback;
+            lock (_cacheLock)
+            {
+                fallback = _catalogCache;
+            }
 
-        if (fallback is not null)
-        {
-            EnsureCatalogIndex();
-            return fallback;
+            if (fallback is not null)
+            {
+                EnsureCatalogIndex();
+                return ApplyProviderFilter(fallback);
+            }
         }
 
         return Array.Empty<StreamarrCatalogEntry>();
@@ -256,4 +335,68 @@ internal sealed class StreamarrApiClient
             return null;
         }
     }
+
+    public async Task<StreamarrHealthStatus> GetHealthAsync(CancellationToken cancellationToken)
+    {
+        var snapshot = GetConfigurationSnapshot();
+        EnsureConfigurationSnapshot(snapshot);
+
+        try
+        {
+            using var client = CreateClient(snapshot);
+            var response = await client.GetAsync("health", cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return new StreamarrHealthStatus
+                {
+                    IsHealthy = false,
+                    Summary = $"HTTP {(int)response.StatusCode}",
+                    ResolverBaseUrl = snapshot.BaseUrl
+                };
+            }
+
+            var payload = await response.Content.ReadFromJsonAsync<ResolverHealthPayload>(cancellationToken: cancellationToken).ConfigureAwait(false);
+            return new StreamarrHealthStatus
+            {
+                IsHealthy = string.Equals(payload?.Status, "ok", StringComparison.OrdinalIgnoreCase),
+                Summary = payload?.Status ?? "unknown",
+                CacheSize = payload?.CacheSize,
+                ResolverBaseUrl = snapshot.BaseUrl
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to retrieve resolver health information");
+            return new StreamarrHealthStatus
+            {
+                IsHealthy = false,
+                Summary = ex.Message,
+                ResolverBaseUrl = snapshot.BaseUrl
+            };
+        }
+    }
+
+    private sealed class ResolverHealthPayload
+    {
+        [JsonPropertyName("status")]
+        public string? Status { get; set; }
+
+        [JsonPropertyName("cache_size")]
+        public int? CacheSize { get; set; }
+    }
+}
+
+public sealed class StreamarrHealthStatus
+{
+    public bool IsHealthy { get; init; }
+
+    public string Summary { get; init; } = string.Empty;
+
+    public int? CacheSize { get; init; }
+
+    public string? ResolverBaseUrl { get; init; }
 }

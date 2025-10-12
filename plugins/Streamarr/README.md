@@ -6,6 +6,7 @@ Production-ready Jellyfin integration for the Streamarr resolver stack.
 
 - Configurable resolver base URL with optional API key forwarded via `X-Api-Key`.
 - Resolver client caches the catalog for 10 minutes and auto-invalidates when settings change.
+- Admin UI exposes cache tuning + live resolver health check.
 - Remote metadata providers (movies, series, episodes) surface Streamarr catalog matches and honour provider IDs.
 - Playback integration redirects Jellyfin to the resolver's short-lived `/play/<id>` tokens.
 
