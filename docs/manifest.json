@@ -9,11 +9,11 @@
     "imageUrl": "",
     "versions": [
       {
-        "version": "0.1.1",
+        "version": "0.1.2",
         "targetAbi": "10.9.0.0",
         "sourceUrl": "https://github.com/metinxsezdin/Streamarr/releases/download/v0.1.1/StreamarrPlugin.zip",
-        "checksum": "6fa8fd6fd3d9a49b0315b4943c61e318",
-        "timestamp": "2025-10-12T03:17:24Z"
+        "checksum": "5faf8123db6ae4ce91ee4a1da2a34cfb",
+        "timestamp": "2025-10-12T03:29:36Z"
       }
     ]
   }
