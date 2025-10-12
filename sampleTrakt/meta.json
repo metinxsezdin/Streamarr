@@ -1,0 +1,13 @@
+{
+    "category": "General",
+    "changelog": "- 10.10 support (#238) @crobibero\n\n### Dependency updates ###\n- Update dependency Microsoft.Extensions.Http to v8 (#187) @renovate",
+    "description": "Record your watched media with Trakt.\n",
+    "guid": "4fe3201e-d6ae-4f2e-8917-e12bda571281",
+    "imageUrl": "https://repo.jellyfin.org/releases/plugin/images/jellyfin-plugin-trakt.png",
+    "name": "Trakt",
+    "overview": "Record your watched media with Trakt",
+    "owner": "jellyfin",
+    "targetAbi": "10.10.0.0",
+    "timestamp": "2024-10-26T18:15:06Z",
+    "version": "26.0.0.0"
+}
