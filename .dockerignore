@@ -1,0 +1,9 @@
+.git
+.gitignore
+.env
+docs/archive/
+output/
+plugins/
+__pycache__/
+*.pyc
+*.pyo
