@@ -6,7 +6,8 @@ from __future__ import annotations
 import re
 import sys
 import time
-from typing import Optional, Dict, Any, List
+from dataclasses import dataclass
+from typing import Callable, Optional, Dict, Any, List
 from urllib.parse import urljoin
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
@@ -16,6 +17,14 @@ if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
+
+
+@dataclass
+class PlayerProfile:
+    name: str
+    matcher: Callable[[Optional[str]], bool]
+    selectors: List[str]
+    fallback_video_play: bool = True
 
 
 class HDFilmScraper:
@@ -29,6 +38,108 @@ class HDFilmScraper:
         self.embed_url: Optional[str] = None
         self.last_page_url: Optional[str] = None
         self.user_agent: str = self.DEFAULT_USER_AGENT
+        self.player_profiles: List[PlayerProfile] = self._build_profiles()
+
+    def _build_profiles(self) -> List[PlayerProfile]:
+        rapidrame_hosts = ("rapidrame", "rplayer", "hdfilmcehennemi.la/player")
+        sobreats_hosts = ("sobreatsesuyp", "playnn", "playmix", "playdn", "movie", "wniodl", "sstream")
+
+        def host_match(hosts: tuple[str, ...]) -> Callable[[Optional[str]], bool]:
+            return lambda url: bool(url and any(host in url for host in hosts))
+
+        return [
+            PlayerProfile(
+                name="rapidrame",
+                matcher=host_match(rapidrame_hosts),
+                selectors=[
+                    "button.vjs-big-play-button",
+                    ".vjs-big-play-button",
+                    ".plyr__control--overlaid",
+                    "button[title='Play Video']",
+                    "button.plyr__control--overlaid",
+                ],
+            ),
+            PlayerProfile(
+                name="plyr-generic",
+                matcher=host_match(sobreats_hosts),
+                selectors=[
+                    "button[aria-label='Play']",
+                    ".plyr__controls button[data-plyr='play']",
+                    ".plyr__control--overlaid",
+                    ".plyr__control.plyr__control--overlaid",
+                ],
+            ),
+            PlayerProfile(
+                name="default",
+                matcher=lambda _: True,
+                selectors=[
+                    "button.vjs-big-play-button",
+                    ".vjs-big-play-button",
+                    ".plyr__control--overlaid",
+                    "button[title='Play Video']",
+                    "button.plyr__control",
+                ],
+            ),
+        ]
+
+    def _click_selectors(self, frame, selectors: List[str]) -> bool:
+        for selector in selectors:
+            try:
+                button = frame.query_selector(selector)
+                if not button:
+                    continue
+                button.click(timeout=2000, force=True)
+                print(f"  [profile] Clicked selector: {selector}")
+                frame.wait_for_timeout(800)
+                return True
+            except Exception:
+                continue
+        return False
+
+    def _video_play_fallback(self, frame) -> bool:
+        try:
+            played_count = frame.evaluate(
+                """
+                () => {
+                    const video = document.querySelector('video');
+                    if (!video) {
+                        return false;
+                    }
+                    video.muted = true;
+                    const result = video.play();
+                    if (result && typeof result.then === 'function') {
+                        result.then(() => {}).catch(() => {});
+                    }
+                    return true;
+                }
+                """
+            )
+            if played_count:
+                print("  [auto] Triggered video.play() fallback")
+                frame.wait_for_timeout(1000)
+                return True
+        except Exception as exc:
+            print(f"  [auto] video.play() fallback failed: {exc}")
+        return False
+
+    def _start_with_profiles(self, frame, embed_url: Optional[str]) -> bool:
+        for profile in self.player_profiles:
+            if not profile.matcher(embed_url):
+                continue
+            print(f"  [profile] Attempting '{profile.name}' profile")
+            if self._execute_profile(profile, frame):
+                return True
+        return False
+
+    def _execute_profile(self, profile: PlayerProfile, frame) -> bool:
+        if frame is None:
+            return False
+        clicked = self._click_selectors(frame, profile.selectors)
+        if clicked:
+            return True
+        if profile.fallback_video_play:
+            return self._video_play_fallback(frame)
+        return False
 
     def auto_start_player(self, page) -> bool:
         """Attempt to trigger the player without manual interaction."""
@@ -104,59 +215,10 @@ class HDFilmScraper:
         except Exception:
             pass
 
-        try:
-            play_button = iframe_frame.get_by_role("button", name="Play Video")
-            play_button.click(timeout=3000)
-            print("  [auto] Clicked iframe play button (role=button, name='Play Video')")
-            iframe_frame.wait_for_timeout(800)
+        if self._start_with_profiles(iframe_frame, self.embed_url):
             return True
-        except Exception as exc:
-            print(f"  [auto] Codegen play button click failed: {exc}")
 
-        play_selectors = [
-            "button.vjs-big-play-button",
-            ".vjs-big-play-button",
-            ".plyr__control--overlaid",
-            "button[title='Play Video']",
-            ".btn-play",
-        ]
-
-        for selector in play_selectors:
-            try:
-                button = iframe_frame.query_selector(selector)
-                if button:
-                    button.click(timeout=2000, force=True)
-                    print(f"  [auto] Clicked player selector: {selector}")
-                    iframe_frame.wait_for_timeout(800)
-                    return True
-            except Exception:
-                continue
-
-        try:
-            played_count = iframe_frame.evaluate(
-                """
-                () => {
-                    const video = document.querySelector('video');
-                    if (!video) {
-                        return false;
-                    }
-                    video.muted = true;
-                    const result = video.play();
-                    if (result && typeof result.then === 'function') {
-                        result.then(() => {}).catch(() => {});
-                    }
-                    return true;
-                }
-                """
-            )
-            if played_count:
-                print("  [auto] Triggered video.play() fallback")
-                iframe_frame.wait_for_timeout(1000)
-                return True
-        except Exception as exc:
-            print(f"  [auto] video.play() fallback failed: {exc}")
-
-        print("  [auto] Unable to auto-start playback.")
+        print("  [auto] Unable to auto-start playback with known profiles.")
         return triggered
 
     def parse_master_playlist(self, content: str) -> List[Dict[str, Any]]:
@@ -215,15 +277,59 @@ class HDFilmScraper:
         self.embed_url = None
         self.last_page_url = page_url
 
+        master_keywords = (
+            '/txt/master',
+            'master.m3u8',
+            'master.txt',
+            'playlist.m3u8',
+            'index.m3u8',
+            '.ism/manifest',
+            '.mpd',
+        )
+        skip_extensions = ('.ts', '.jpg', '.jpeg', '.png', '.gif', '.vtt', '.webvtt', '.aac', '.mp3', '.m4a')
+
+        def maybe_add_master(candidate: str) -> None:
+            if not candidate:
+                return
+            lowered_candidate = candidate.lower()
+            if any(lowered_candidate.endswith(ext) for ext in skip_extensions):
+                return
+            if candidate not in master_urls:
+                master_urls.append(candidate)
+                timestamp = time.strftime('%H:%M:%S')
+                print(f"\n  [{timestamp}] \u2713\u2713 MASTER URL CAPTURED: {candidate[:70]}...")
+                print(f"  Total URLs captured: {len(master_urls)}")
+
         def handle_response(response):
             url = response.url
             status = response.status
-            if status == 200 and any(x in url.lower() for x in ['/txt/master', 'master.m3u8', 'master.txt']):
-                if url not in master_urls:
-                    master_urls.append(url)
-                    timestamp = time.strftime("%H:%M:%S")
-                    print(f"\n  [{timestamp}] ✓✓ MASTER URL CAPTURED: {url[:70]}...")
-                    print(f"  Total URLs captured: {len(master_urls)}")
+            if status != 200:
+                return
+
+            lowered = url.lower()
+            if any(keyword in lowered for keyword in master_keywords):
+                if any(lowered.endswith(ext) for ext in skip_extensions):
+                    return
+                maybe_add_master(url)
+                return
+
+            content_type = ''
+            try:
+                headers = response.headers
+                content_type = (headers.get('content-type') or '').lower()
+            except Exception:
+                headers = {}
+
+            if any(key in lowered for key in ('.json', '.php')) or 'application/json' in content_type or 'text/plain' in content_type:
+                body = ''
+                try:
+                    body = response.text()
+                except Exception:
+                    pass
+                if body:
+                    for match in re.findall(r'https?://[^\s"\'<>]+\.m3u8[^\s"\'<>]*', body):
+                        maybe_add_master(match)
+
 
         with sync_playwright() as p:
             browser = p.firefox.launch(headless=self.headless)
