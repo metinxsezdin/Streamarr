@@ -123,12 +123,79 @@ class HDFilmScraper:
         return False
 
     def _start_with_profiles(self, frame, embed_url: Optional[str]) -> bool:
+        profile_names = []
         for profile in self.player_profiles:
             if not profile.matcher(embed_url):
                 continue
+            profile_names.append(profile.name)
             print(f"  [profile] Attempting '{profile.name}' profile")
             if self._execute_profile(profile, frame):
                 return True
+        if profile_names:
+            print(f"  [profile] No success with profiles: {', '.join(profile_names)}")
+        return False
+
+    def _switch_to_tab(self, page, keyword: str) -> bool:
+        pattern = re.compile(keyword, re.IGNORECASE)
+        selectors = [
+            f"text=/{keyword}/i",
+            f"//button[contains(translate(normalize-space(.), '{keyword.upper()}', '{keyword.lower()}'), '{keyword.lower()}')]",
+            f"//a[contains(translate(normalize-space(.), '{keyword.upper()}', '{keyword.lower()}'), '{keyword.lower()}')]",
+            f"//li[contains(translate(normalize-space(.), '{keyword.upper()}', '{keyword.lower()}'), '{keyword.lower()}')]",
+            "[data-player]",
+            "[data-target]",
+            "[data-source]",
+        ]
+
+        for selector in selectors:
+            try:
+                locator = page.locator(selector)
+            except Exception:
+                continue
+
+            count = locator.count()
+            if count == 0:
+                continue
+
+            for idx in range(count):
+                candidate = locator.nth(idx)
+                text = ""
+                try:
+                    text = candidate.inner_text(timeout=500) or ""
+                except Exception:
+                    pass
+
+                attr_values = []
+                try:
+                    attr_values = [
+                        candidate.get_attribute("data-player"),
+                        candidate.get_attribute("data-target"),
+                        candidate.get_attribute("data-source"),
+                    ]
+                except Exception:
+                    pass
+
+                if text and pattern.search(text):
+                    print(f"  [tab] Switching to tab '{text.strip()}' via selector '{selector}'")
+                    try:
+                        candidate.click(timeout=2000, force=True)
+                        page.wait_for_timeout(1500)
+                        return True
+                    except Exception as exc:
+                        print(f"  [tab] Failed to click tab '{text.strip()}': {exc}")
+                        continue
+
+                if any(value and pattern.search(value) for value in attr_values):
+                    print(f"  [tab] Switching via attribute using selector '{selector}'")
+                    try:
+                        candidate.click(timeout=2000, force=True)
+                        page.wait_for_timeout(1500)
+                        return True
+                    except Exception as exc:
+                        print(f"  [tab] Failed attribute click: {exc}")
+                        continue
+
+        print(f"  [tab] Could not locate a tab matching '{keyword}'")
         return False
 
     def _execute_profile(self, profile: PlayerProfile, frame) -> bool:
@@ -156,6 +223,17 @@ class HDFilmScraper:
             print("  [auto] Overlay '.play-that-video' not found")
         except Exception as exc:
             print(f"  [auto] Overlay click failed: {exc}")
+
+        if not triggered:
+            try:
+                page.get_by_role("button", name="Rapidrame").click(timeout=3000)
+                page.wait_for_timeout(600)
+                print("  [auto] Clicked 'Rapidrame' button via role lookup")
+                triggered = True
+            except PlaywrightTimeout:
+                print("  [auto] 'Rapidrame' button role not found")
+            except Exception as exc:
+                print(f"  [auto] Failed to click 'Rapidrame' button: {exc}")
 
         try:
             applied = page.evaluate(
@@ -214,6 +292,36 @@ class HDFilmScraper:
             pass
         except Exception:
             pass
+
+        play_clicked = False
+        try:
+            iframe_frame.get_by_role("img", name="Play icon").click(timeout=3000)
+            iframe_frame.wait_for_timeout(800)
+            print("  [auto] Clicked 'Play icon' inside iframe via role lookup")
+            triggered = True
+            play_clicked = True
+        except PlaywrightTimeout:
+            print("  [auto] 'Play icon' role not found inside iframe")
+        except Exception as exc:
+            print(f"  [auto] Failed to click iframe 'Play icon': {exc}")
+
+        if not play_clicked:
+            try:
+                page.get_by_role("img", name="Play icon").click(timeout=3000)
+                page.wait_for_timeout(600)
+                print("  [auto] Clicked 'Play icon' on main page via role lookup")
+                triggered = True
+                play_clicked = True
+            except PlaywrightTimeout:
+                print("  [auto] 'Play icon' role not found on main page")
+            except Exception as exc:
+                print(f"  [auto] Failed to click main page 'Play icon': {exc}")
+
+        try:
+            snippet = iframe_frame.content()[:500].replace("\n", " ")
+            print(f"  [auto] Frame HTML snippet: {snippet}")
+        except Exception as exc:
+            print(f"  [auto] Failed to get frame HTML: {exc}")
 
         if self._start_with_profiles(iframe_frame, self.embed_url):
             return True
@@ -329,6 +437,8 @@ class HDFilmScraper:
                 if body:
                     for match in re.findall(r'https?://[^\s"\'<>]+\.m3u8[^\s"\'<>]*', body):
                         maybe_add_master(match)
+                    snippet = body[:200].replace('\n', ' ')
+                    print(f"  [capture] {url[:60]} -> {snippet}...")
 
 
         with sync_playwright() as p:
@@ -345,20 +455,47 @@ class HDFilmScraper:
                 page.goto(page_url, wait_until='domcontentloaded', timeout=30000)
                 time.sleep(3)
 
-                print("\n[2/2] Attempting to start playback automatically...")
-                auto_started = self.auto_start_player(page)
-                if auto_started:
-                    print("  [auto] Playback trigger sent; waiting for master playlist...\n")
-                else:
-                    print("  [auto] Trigger could not be confirmed; listening for stream traffic...\n")
+                attempt_configs = [
+                    {"label": "default", "keyword": None},
+                    {"label": "rapidrame", "keyword": "rapid"},
+                ]
 
-                for i in range(60):
+                for attempt_index, attempt in enumerate(attempt_configs, start=1):
+                    if attempt_index > 1 or attempt["keyword"]:
+                        keyword = attempt["keyword"]
+                        if keyword:
+                            print(f"\n[attempt {attempt_index}] Switching to player tab containing '{keyword}'")
+                            if not self._switch_to_tab(page, keyword):
+                                print(f"  [attempt {attempt_index}] Tab match for '{keyword}' not found, skipping.")
+                                continue
+                            master_urls.clear()
+                            self.master_url = None
+                            self.embed_url = None
+
+                    print(f"\n[attempt {attempt_index}] Attempting to start playback automatically...")
+                    auto_started = self.auto_start_player(page)
+                    if auto_started:
+                        print("  [auto] Playback trigger sent; waiting for master playlist...\n")
+                    else:
+                        print("  [auto] Trigger could not be confirmed; listening for stream traffic...\n")
+
+                    for i in range(60):
+                        if master_urls:
+                            print(f"\n  ✓ Master URL captured after {i + 1}s!")
+                            break
+                        if (i + 1) % 5 == 0:
+                            print(f"  [{i + 1}s] Still waiting... (ensure video is loading)")
+                        page.wait_for_timeout(1000)
+
                     if master_urls:
-                        print(f"\n  ✓ Master URL captured after {i + 1}s!")
+                        current_master = self.master_url or master_urls[0]
+                        if current_master and "rapid" not in current_master.lower():
+                            print(f"  [attempt {attempt_index}] Master '{current_master}' appears to be a slideshow source. Trying next tab...")
+                            master_urls.clear()
+                            self.master_url = None
+                            self.embed_url = None
+                            continue
                         break
-                    if (i + 1) % 5 == 0:
-                        print(f"  [{i + 1}s] Still waiting... (ensure video is loading)")
-                    page.wait_for_timeout(1000)
 
                 if not master_urls:
                     print("  ✗ No master URL captured!")
