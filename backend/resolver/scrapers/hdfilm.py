@@ -183,6 +183,13 @@ class HDFilmScraper:
                         return True
                     except Exception as exc:
                         print(f"  [tab] Failed to click tab '{text.strip()}': {exc}")
+                        try:
+                            candidate.evaluate("(element) => element.click()")
+                            page.wait_for_timeout(1500)
+                            print("  [tab] Triggered tab via DOM click fallback")
+                            return True
+                        except Exception as inner_exc:
+                            print(f"  [tab] DOM click fallback failed: {inner_exc}")
                         continue
 
                 if any(value and pattern.search(value) for value in attr_values):
@@ -193,6 +200,13 @@ class HDFilmScraper:
                         return True
                     except Exception as exc:
                         print(f"  [tab] Failed attribute click: {exc}")
+                        try:
+                            candidate.evaluate("(element) => element.click()")
+                            page.wait_for_timeout(1500)
+                            print("  [tab] Attribute DOM click fallback succeeded")
+                            return True
+                        except Exception as inner_exc:
+                            print(f"  [tab] DOM attribute click fallback failed: {inner_exc}")
                         continue
 
         print(f"  [tab] Could not locate a tab matching '{keyword}'")
@@ -465,12 +479,12 @@ class HDFilmScraper:
                         keyword = attempt["keyword"]
                         if keyword:
                             print(f"\n[attempt {attempt_index}] Switching to player tab containing '{keyword}'")
-                            if not self._switch_to_tab(page, keyword):
-                                print(f"  [attempt {attempt_index}] Tab match for '{keyword}' not found, skipping.")
-                                continue
                             master_urls.clear()
                             self.master_url = None
                             self.embed_url = None
+                            if not self._switch_to_tab(page, keyword):
+                                print(f"  [attempt {attempt_index}] Tab match for '{keyword}' not found, skipping.")
+                                continue
 
                     print(f"\n[attempt {attempt_index}] Attempting to start playback automatically...")
                     auto_started = self.auto_start_player(page)

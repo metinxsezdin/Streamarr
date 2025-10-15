@@ -10,9 +10,12 @@ from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 from .scrapers.dizibox import DiziboxScraper
+from .scrapers.dizilla import DizillaScraper
+from .scrapers.dizipal import DizipalScraper
+from .scrapers.dizipub import DizipubScraper
 from .scrapers.hdfilm import HDFilmScraper
 
-SUPPORTED_SITES = ("dizibox", "hdfilm")
+SUPPORTED_SITES = ("dizibox", "hdfilm", "dizipub", "dizipal", "dizilla")
 
 
 def detect_site(url: str) -> str:
@@ -22,6 +25,12 @@ def detect_site(url: str) -> str:
         return "dizibox"
     if "hdfilmcehennemi" in hostname:
         return "hdfilm"
+    if "dizipub" in hostname:
+        return "dizipub"
+    if "dizipal" in hostname:
+        return "dizipal"
+    if "dizilla" in hostname:
+        return "dizilla"
     raise ValueError(f"Unsupported hostname: {hostname}")
 
 
@@ -39,6 +48,15 @@ def resolve_stream(
     if site == "dizibox":
         scraper = DiziboxScraper(headless=headless)
         result = scraper.get_stream_url(url)
+    elif site == "dizipub":
+        scraper = DizipubScraper(headless=headless)
+        result = scraper.get_stream_info(url)
+    elif site == "dizipal":
+        scraper = DizipalScraper(headless=headless)
+        result = scraper.get_stream_info(url)
+    elif site == "dizilla":
+        scraper = DizillaScraper(headless=headless)
+        result = scraper.get_stream_info(url)
     else:
         scraper = HDFilmScraper(headless=headless)
         result = scraper.get_stream_info(url)
