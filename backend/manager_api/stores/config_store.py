@@ -50,4 +50,4 @@ class ConfigStore:
 def _extract_update(update: ConfigUpdate) -> dict[str, Any]:
     """Extract a payload suitable for model updates."""
 
-    return update.model_dump(exclude_unset=True)
+    return update.model_dump(exclude_unset=True, exclude_none=True)

@@ -69,39 +69,18 @@ paths:
       operationId: listJobs
       parameters:
         - in: query
-          name: limit
+          name: status
           schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
-          description: Number of recent jobs to return.
+            type: string
+            enum: [queued, running, completed, failed]
+          description: Filter jobs by status.
       responses:
         '200':
-          description: Recent job list.
+          description: Paginated job list.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Job'
-  /jobs/run:
-    post:
-      summary: Enqueue job
-      operationId: runJob
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/JobRunRequest'
-      responses:
-        '201':
-          description: Job enqueued and completed.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Job'
+                $ref: '#/components/schemas/JobList'
   /jobs/{jobId}:
     get:
       summary: Fetch job detail
@@ -250,17 +229,24 @@ components:
         - type
         - status
         - progress
-    JobRunRequest:
+    JobList:
       type: object
       properties:
-        type:
-          type: string
-        payload:
-          type: object
-          additionalProperties: true
-          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Job'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
       required:
-        - type
+        - items
+        - total
+        - page
+        - page_size
     StreamVariant:
       type: object
       properties:
