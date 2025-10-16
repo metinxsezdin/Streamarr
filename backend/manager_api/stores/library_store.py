@@ -13,6 +13,7 @@ from ..schemas import (
     LibraryItemModel,
     LibraryListModel,
     LibraryMetricsModel,
+    LibrarySortOption,
     StreamVariantModel,
 )
 
@@ -27,12 +28,13 @@ class LibraryStore:
         self,
         *,
         query: str | None,
-        site: str | None,
+        sites: list[str] | None,
         item_type: str | None,
         year: int | None,
         year_min: int | None,
         year_max: int | None,
         has_tmdb: bool | None,
+        sort: LibrarySortOption,
         page: int,
         page_size: int,
     ) -> LibraryListModel:
@@ -42,8 +44,10 @@ class LibraryStore:
         filters = []
         if query:
             filters.append(func.lower(LibraryItemRecord.title).like(f"%{query.lower()}%"))
-        if site:
-            filters.append(func.lower(LibraryItemRecord.site) == site.lower())
+        if sites:
+            normalized_sites = sorted({site.lower() for site in sites if site})
+            if normalized_sites:
+                filters.append(func.lower(LibraryItemRecord.site).in_(normalized_sites))
         if item_type:
             filters.append(LibraryItemRecord.item_type == item_type)
         if year is not None:
@@ -60,10 +64,34 @@ class LibraryStore:
             filters.append(LibraryItemRecord.tmdb_id.is_(None))
 
         count_statement = select(func.count()).select_from(LibraryItemRecord)
-        items_statement = select(LibraryItemRecord).order_by(LibraryItemRecord.updated_at.desc())
+        items_statement = select(LibraryItemRecord)
         for condition in filters:
             count_statement = count_statement.where(condition)
             items_statement = items_statement.where(condition)
+
+        sort_orders: dict[LibrarySortOption, tuple[object, ...]] = {
+            "updated_desc": (LibraryItemRecord.updated_at.desc(), LibraryItemRecord.id),
+            "updated_asc": (LibraryItemRecord.updated_at.asc(), LibraryItemRecord.id),
+            "title_asc": (
+                func.lower(LibraryItemRecord.title).asc(),
+                LibraryItemRecord.id,
+            ),
+            "title_desc": (
+                func.lower(LibraryItemRecord.title).desc(),
+                LibraryItemRecord.id,
+            ),
+            "year_desc": (
+                LibraryItemRecord.year.desc().nullslast(),
+                func.lower(LibraryItemRecord.title).asc(),
+            ),
+            "year_asc": (
+                LibraryItemRecord.year.asc().nullslast(),
+                func.lower(LibraryItemRecord.title).asc(),
+            ),
+        }
+
+        order_by_clauses = sort_orders.get(sort, sort_orders["updated_desc"])
+        items_statement = items_statement.order_by(*order_by_clauses)
 
         items_statement = items_statement.offset(offset).limit(page_size)
 

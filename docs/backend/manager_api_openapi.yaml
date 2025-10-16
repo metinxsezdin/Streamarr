@@ -134,8 +134,12 @@ paths:
         - in: query
           name: site
           schema:
-            type: string
-          description: Filter by source site.
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by one or more source sites.
         - in: query
           name: item_type
           schema:
@@ -170,6 +174,19 @@ paths:
           schema:
             type: boolean
           description: Filter by presence of TMDB metadata.
+        - in: query
+          name: sort
+          schema:
+            type: string
+            default: updated_desc
+            enum:
+              - updated_desc
+              - updated_asc
+              - title_asc
+              - title_desc
+              - year_desc
+              - year_asc
+          description: Sort ordering applied to the returned items.
         - in: query
           name: page
           schema:

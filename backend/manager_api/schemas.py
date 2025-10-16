@@ -84,6 +84,16 @@ class LibraryListModel(BaseModel):
     page_size: int
 
 
+LibrarySortOption = Literal[
+    "updated_desc",
+    "updated_asc",
+    "title_asc",
+    "title_desc",
+    "year_desc",
+    "year_asc",
+]
+
+
 class LibraryMetricsModel(BaseModel):
     """Aggregate statistics for library catalog insights."""
 

@@ -178,6 +178,18 @@ def test_library_list_and_detail_round_trip(client: TestClient) -> None:
     assert site_payload["total"] == 1
     assert site_payload["items"][0]["id"] == "episode-1"
 
+    multi_site_response = client.get(
+        "/library",
+        params=[("site", "dizibox"), ("site", "dizipal"), ("page_size", "10")],
+    )
+    assert multi_site_response.status_code == 200
+    multi_site_payload = multi_site_response.json()
+    assert multi_site_payload["total"] == 2
+    assert [item["id"] for item in multi_site_payload["items"]] == [
+        "episode-1",
+        "movie-1",
+    ]
+
     type_response = client.get("/library", params={"item_type": "movie"})
     assert type_response.status_code == 200
     type_payload = type_response.json()
@@ -213,6 +225,17 @@ def test_library_list_and_detail_round_trip(client: TestClient) -> None:
     year_max_payload = year_max_response.json()
     assert year_max_payload["total"] == 1
     assert year_max_payload["items"][0]["id"] == "episode-1"
+
+    sort_response = client.get(
+        "/library",
+        params={"sort": "title_desc", "page_size": 10},
+    )
+    assert sort_response.status_code == 200
+    sort_payload = sort_response.json()
+    assert [item["id"] for item in sort_payload["items"]] == [
+        "episode-1",
+        "movie-1",
+    ]
 
     detail_response = client.get("/library/movie-1")
     assert detail_response.status_code == 200

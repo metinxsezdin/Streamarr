@@ -1,8 +1,15 @@
 """Library endpoints for querying resolver catalog metadata."""
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..dependencies import get_library_store
-from ..schemas import LibraryItemModel, LibraryListModel, LibraryMetricsModel
+from ..schemas import (
+    LibraryItemModel,
+    LibraryListModel,
+    LibraryMetricsModel,
+    LibrarySortOption,
+)
 from ..stores.library_store import LibraryStore
 
 router = APIRouter(prefix="/library", tags=["library"])
@@ -11,7 +18,16 @@ router = APIRouter(prefix="/library", tags=["library"])
 @router.get("", response_model=LibraryListModel)
 def list_library_items(
     query: str | None = Query(default=None, description="Optional title search term."),
-    site: str | None = Query(default=None, description="Filter results to a specific source site."),
+    sites: Annotated[
+        list[str] | None,
+        Query(
+            alias="site",
+            description=(
+                "Filter results to one or more source sites. "
+                "Repeat the query parameter to include multiple sites."
+            ),
+        ),
+    ] = None,
     item_type: str | None = Query(
         default=None,
         description="Filter results by item type (movie or episode).",
@@ -38,6 +54,10 @@ def list_library_items(
         default=None,
         description="Filter by presence of TMDB metadata (true for only enriched items, false for missing).",
     ),
+    sort: LibrarySortOption = Query(
+        default="updated_desc",
+        description="Sort ordering applied to the returned items.",
+    ),
     page: int = Query(default=1, ge=1, description="Page number starting at 1."),
     page_size: int = Query(
         default=25,
@@ -51,12 +71,13 @@ def list_library_items(
 
     return store.list(
         query=query,
-        site=site,
+        sites=sites,
         item_type=item_type,
         year=year,
         year_min=year_min,
         year_max=year_max,
         has_tmdb=has_tmdb,
+        sort=sort,
         page=page,
         page_size=page_size,
     )

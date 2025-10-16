@@ -1,6 +1,7 @@
 """Tests for the Typer-based manager CLI."""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -247,6 +248,35 @@ def test_cli_library_list_supports_filters(
     assert result.exit_code == 0
     assert "\"total\": 1" in result.output
     assert "episode-1" in result.output
+
+
+def test_cli_library_list_supports_multiple_sites_and_sort(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """library list should accept repeated site filters and custom sort order."""
+
+    _seed_library(cli_client)
+
+    result = runner.invoke(
+        cli_app,
+        [
+            "library",
+            "list",
+            "--site",
+            "dizibox",
+            "--site",
+            "dizipal",
+            "--sort",
+            "title_desc",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert [item["id"] for item in payload["items"]] == [
+        "episode-1",
+        "movie-1",
+    ]
 
 
 def test_cli_library_show_outputs_item_detail(

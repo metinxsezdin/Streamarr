@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Optional
+from typing import Literal, Optional
 
 import typer
 
@@ -143,8 +143,11 @@ def list_library(
     page: int = typer.Option(1, min=1, help="Page number starting at 1."),
     page_size: int = typer.Option(25, min=1, max=100, help="Number of items per page."),
     query: Optional[str] = typer.Option(None, help="Optional title search term."),
-    site: Optional[str] = typer.Option(
-        None, help="Filter results to a specific source site (e.g., dizibox)."
+    sites: Optional[list[str]] = typer.Option(
+        None,
+        "--site",
+        "-s",
+        help="Filter results to one or more source sites (repeat the flag).",
     ),
     item_type: Optional[str] = typer.Option(
         None, help="Filter results by item type (movie or episode)."
@@ -173,15 +176,27 @@ def list_library(
         help="Filter by presence of TMDB metadata.",
         show_default=False,
     ),
+    sort: Literal[
+        "updated_desc",
+        "updated_asc",
+        "title_asc",
+        "title_desc",
+        "year_desc",
+        "year_asc",
+    ] = typer.Option(
+        "updated_desc",
+        help="Sort ordering applied to results.",
+        show_default=True,
+    ),
     api_base: str = _api_base_option(),
 ) -> None:
     """Display library metadata returned by the Manager API."""
 
-    params: dict[str, object] = {"page": page, "page_size": page_size}
+    params: dict[str, object] = {"page": page, "page_size": page_size, "sort": sort}
     if query:
         params["query"] = query
-    if site:
-        params["site"] = site
+    if sites:
+        params["site"] = sites
     if item_type:
         params["item_type"] = item_type
     if year is not None:
