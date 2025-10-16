@@ -349,6 +349,47 @@ paths:
                 additionalProperties: true
         '502':
           description: Resolver unreachable or responded with an error.
+  /resolver/start:
+    post:
+      summary: Launch managed resolver process
+      operationId: resolverStart
+      responses:
+        '200':
+          description: Resolver process launched.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolverProcessStatus'
+        '409':
+          description: Resolver process already running.
+        '500':
+          description: Failed to launch resolver process.
+  /resolver/stop:
+    post:
+      summary: Stop managed resolver process
+      operationId: resolverStop
+      responses:
+        '200':
+          description: Resolver process stopped.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolverProcessStatus'
+        '409':
+          description: Resolver process not running.
+        '500':
+          description: Failed to stop resolver process.
+  /resolver/status:
+    get:
+      summary: Managed resolver process status
+      operationId: resolverStatus
+      responses:
+        '200':
+          description: Resolver process status payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolverProcessStatus'
 components:
   schemas:
     HealthStatus:
@@ -378,6 +419,19 @@ components:
       required:
         - resolver_url
         - strm_output_path
+    ResolverProcessStatus:
+      type: object
+      properties:
+        running:
+          type: boolean
+        pid:
+          type: integer
+          nullable: true
+        exit_code:
+          type: integer
+          nullable: true
+      required:
+        - running
         - html_title_fetch
     ConfigUpdate:
       type: object

@@ -20,7 +20,10 @@ from backend.manager_api.schemas import (  # noqa: E402
     JobLogModel,
     JobModel,
 )
-from backend.manager_api.services.resolver_service import (  # noqa: E402
+from backend.manager_api.services import (  # noqa: E402
+    ResolverAlreadyRunningError,
+    ResolverNotRunningError,
+    ResolverProcessStatus,
     ResolverServiceError,
 )
 from backend.manager_api.settings import ManagerSettings  # noqa: E402
@@ -461,16 +464,119 @@ def test_resolver_health_returns_502_on_failure(client: TestClient) -> None:
     assert response.json()["detail"] == "resolver offline"
 
 
+def test_resolver_start_launches_process(client: TestClient) -> None:
+    """POST /resolver/start should ask the service to launch the resolver."""
+
+    stub = StubResolverService(
+        start_status=ResolverProcessStatus(running=True, pid=987, exit_code=None)
+    )
+    client.app.state.app_state.resolver_service = stub
+
+    response = client.post("/resolver/start")
+
+    assert response.status_code == 200
+    assert response.json() == {"running": True, "pid": 987, "exit_code": None}
+    assert stub.start_calls == ["http://localhost:5055"]
+
+
+def test_resolver_start_conflict_returns_409(client: TestClient) -> None:
+    """Conflicts when the resolver is already running should surface a 409."""
+
+    stub = StubResolverService(start_error=ResolverAlreadyRunningError("already running"))
+    client.app.state.app_state.resolver_service = stub
+
+    response = client.post("/resolver/start")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "already running"
+
+
+def test_resolver_stop_terminates_process(client: TestClient) -> None:
+    """POST /resolver/stop should terminate the managed process."""
+
+    stub = StubResolverService(
+        stop_status=ResolverProcessStatus(running=False, pid=None, exit_code=0)
+    )
+    client.app.state.app_state.resolver_service = stub
+
+    response = client.post("/resolver/stop")
+
+    assert response.status_code == 200
+    assert response.json() == {"running": False, "pid": None, "exit_code": 0}
+
+
+def test_resolver_stop_conflict_returns_409(client: TestClient) -> None:
+    """Conflicts when stopping a non-running process should yield a 409."""
+
+    stub = StubResolverService(stop_error=ResolverNotRunningError("not running"))
+    client.app.state.app_state.resolver_service = stub
+
+    response = client.post("/resolver/stop")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "not running"
+
+
+def test_resolver_status_returns_payload(client: TestClient) -> None:
+    """GET /resolver/status should expose the tracked process state."""
+
+    stub = StubResolverService(
+        status_payload=ResolverProcessStatus(running=False, pid=None, exit_code=2)
+    )
+    client.app.state.app_state.resolver_service = stub
+
+    response = client.get("/resolver/status")
+
+    assert response.status_code == 200
+    assert response.json() == {"running": False, "pid": None, "exit_code": 2}
+
+
 class StubResolverService:
     """Helper stub that records resolver health calls."""
 
-    def __init__(self, payload: dict[str, object] | None = None, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        payload: dict[str, object] | None = None,
+        error: Exception | None = None,
+        *,
+        start_status: ResolverProcessStatus | None = None,
+        start_error: Exception | None = None,
+        stop_status: ResolverProcessStatus | None = None,
+        stop_error: Exception | None = None,
+        status_payload: ResolverProcessStatus | None = None,
+    ) -> None:
         self.payload = payload or {"status": "ok"}
         self.error = error
         self.calls: list[str] = []
+        self.start_calls: list[str] = []
+        self.start_status = start_status
+        self.start_error = start_error
+        self.stop_status = stop_status
+        self.stop_error = stop_error
+        self.status_payload = status_payload or ResolverProcessStatus(
+            running=False, pid=None, exit_code=None
+        )
 
     def health(self, base_url: str) -> dict[str, object]:
         self.calls.append(base_url)
         if self.error:
             raise self.error
         return dict(self.payload)
+
+    def start_process(self, *, resolver_url: str) -> ResolverProcessStatus:
+        self.start_calls.append(resolver_url)
+        if self.start_error:
+            raise self.start_error
+        if self.start_status is None:
+            raise AssertionError("start_status must be set for start_process tests")
+        return self.start_status
+
+    def stop_process(self) -> ResolverProcessStatus:
+        if self.stop_error:
+            raise self.stop_error
+        if self.stop_status is None:
+            raise AssertionError("stop_status must be set for stop_process tests")
+        return self.stop_status
+
+    def process_status(self) -> ResolverProcessStatus:
+        return self.status_payload

@@ -337,3 +337,33 @@ def resolver_health(api_base: str = _api_base_option()) -> None:
         response = client.get("/resolver/health")
         response.raise_for_status()
         typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
+
+
+@resolver_app.command("start")
+def resolver_start(api_base: str = _api_base_option()) -> None:
+    """Start the resolver process managed by the API service."""
+
+    with create_client(api_base) as client:
+        response = client.post("/resolver/start")
+        response.raise_for_status()
+        typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
+
+
+@resolver_app.command("stop")
+def resolver_stop(api_base: str = _api_base_option()) -> None:
+    """Stop the resolver process managed by the API service."""
+
+    with create_client(api_base) as client:
+        response = client.post("/resolver/stop")
+        response.raise_for_status()
+        typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
+
+
+@resolver_app.command("status")
+def resolver_status(api_base: str = _api_base_option()) -> None:
+    """Display the resolver process status tracked by the manager."""
+
+    with create_client(api_base) as client:
+        response = client.get("/resolver/status")
+        response.raise_for_status()
+        typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))

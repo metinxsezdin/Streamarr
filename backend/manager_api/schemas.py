@@ -14,6 +14,19 @@ class HealthStatus(BaseModel):
     version: str = Field(default="0.1.0", description="Semantic version of the API service.")
 
 
+class ResolverProcessStatusModel(BaseModel):
+    """Represents the resolver process lifecycle state exposed by the API."""
+
+    running: bool = Field(description="Whether the manager currently has a resolver process running.")
+    pid: int | None = Field(
+        default=None, description="Process identifier when the resolver is running."
+    )
+    exit_code: int | None = Field(
+        default=None,
+        description="Exit code from the last managed resolver process if it has stopped.",
+    )
+
+
 class ConfigModel(BaseModel):
     """Represents the persisted manager configuration."""
 

@@ -18,8 +18,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.manager_api import create_app  # noqa: E402
-from backend.manager_api.settings import ManagerSettings  # noqa: E402
 from backend.manager_api.models import LibraryItemRecord  # noqa: E402
+from backend.manager_api.services import ResolverProcessStatus  # noqa: E402
+from backend.manager_api.settings import ManagerSettings  # noqa: E402
 from backend.manager_cli import app as cli_app  # noqa: E402
 from backend.manager_cli import client as client_module  # noqa: E402
 
@@ -27,16 +28,44 @@ from backend.manager_cli import client as client_module  # noqa: E402
 class StubResolverService:
     """Simple stub for the resolver service dependency."""
 
-    def __init__(self, payload: dict[str, object] | None = None, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        payload: dict[str, object] | None = None,
+        error: Exception | None = None,
+        *,
+        start_payload: ResolverProcessStatus | None = None,
+        stop_payload: ResolverProcessStatus | None = None,
+        status_payload: ResolverProcessStatus | None = None,
+    ) -> None:
         self.payload = payload or {"status": "ok"}
         self.error = error
         self.calls: list[str] = []
+        self.start_payload = start_payload or ResolverProcessStatus(
+            running=True, pid=123, exit_code=None
+        )
+        self.stop_payload = stop_payload or ResolverProcessStatus(
+            running=False, pid=None, exit_code=0
+        )
+        self.status_payload = status_payload or ResolverProcessStatus(
+            running=False, pid=None, exit_code=None
+        )
+        self.start_calls: list[str] = []
 
     def health(self, base_url: str) -> dict[str, object]:
         self.calls.append(base_url)
         if self.error:
             raise self.error
         return dict(self.payload)
+
+    def start_process(self, *, resolver_url: str) -> ResolverProcessStatus:
+        self.start_calls.append(resolver_url)
+        return self.start_payload
+
+    def stop_process(self) -> ResolverProcessStatus:
+        return self.stop_payload
+
+    def process_status(self) -> ResolverProcessStatus:
+        return self.status_payload
 
 cli_app_module = importlib.import_module("backend.manager_cli.app")
 
@@ -434,3 +463,52 @@ def test_cli_resolver_health_outputs_payload(
     assert result.exit_code == 0
     assert "\"cache_size\": 7" in result.output
     assert stub.calls == ["http://localhost:5055"]
+
+
+def test_cli_resolver_start_outputs_status(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """resolver start should emit the returned process state."""
+
+    stub = StubResolverService(
+        start_payload=ResolverProcessStatus(running=True, pid=555, exit_code=None)
+    )
+    cli_client.app.state.app_state.resolver_service = stub
+
+    result = runner.invoke(cli_app, ["resolver", "start"])
+
+    assert result.exit_code == 0
+    assert "\"pid\": 555" in result.output
+    assert stub.start_calls == ["http://localhost:5055"]
+
+
+def test_cli_resolver_stop_outputs_status(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """resolver stop should print the termination payload."""
+
+    stub = StubResolverService(
+        stop_payload=ResolverProcessStatus(running=False, pid=None, exit_code=0)
+    )
+    cli_client.app.state.app_state.resolver_service = stub
+
+    result = runner.invoke(cli_app, ["resolver", "stop"])
+
+    assert result.exit_code == 0
+    assert "\"exit_code\": 0" in result.output
+
+
+def test_cli_resolver_status_outputs_payload(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """resolver status should display the tracked process metadata."""
+
+    stub = StubResolverService(
+        status_payload=ResolverProcessStatus(running=False, pid=None, exit_code=2)
+    )
+    cli_client.app.state.app_state.resolver_service = stub
+
+    result = runner.invoke(cli_app, ["resolver", "status"])
+
+    assert result.exit_code == 0
+    assert "\"exit_code\": 2" in result.output
