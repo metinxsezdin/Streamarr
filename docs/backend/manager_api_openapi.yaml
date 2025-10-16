@@ -121,77 +121,88 @@ paths:
                 $ref: '#/components/schemas/Job'
         '404':
           description: Job not found.
-    /library:
-      get:
-        summary: List library items
-        operationId: listLibrary
-        parameters:
-          - in: query
-            name: query
-            schema:
-              type: string
-            description: Search term.
-          - in: query
-            name: site
-            schema:
-              type: string
-            description: Filter by source site.
-          - in: query
-            name: item_type
-            schema:
-              type: string
-              enum:
-                - movie
-                - episode
-            description: Filter by item type.
-          - in: query
-            name: year
-            schema:
-              type: integer
-              minimum: 1800
-              maximum: 3000
-            description: Filter by an exact release year.
-          - in: query
-            name: year_min
-            schema:
-              type: integer
-              minimum: 1800
-              maximum: 3000
-            description: Filter by minimum release year.
-          - in: query
-            name: year_max
-            schema:
-              type: integer
-              minimum: 1800
-              maximum: 3000
-            description: Filter by maximum release year.
-          - in: query
-            name: has_tmdb
-            schema:
-              type: boolean
-            description: Filter by presence of TMDB metadata.
-          - in: query
-            name: page
-            schema:
-              type: integer
-              default: 1
-              minimum: 1
-            description: Page number starting at 1.
-          - in: query
-            name: page_size
-            schema:
-              type: integer
-              default: 25
-              minimum: 1
-              maximum: 100
-            description: Number of items per page.
-        responses:
-          '200':
-            description: Paginated library results.
-            content:
-              application/json:
-                schema:
-                  $ref: '#/components/schemas/LibraryList'
+  /library:
+    get:
+      summary: List library items
+      operationId: listLibrary
+      parameters:
+        - in: query
+          name: query
+          schema:
+            type: string
+          description: Search term.
+        - in: query
+          name: site
+          schema:
+            type: string
+          description: Filter by source site.
+        - in: query
+          name: item_type
+          schema:
+            type: string
+            enum:
+              - movie
+              - episode
+          description: Filter by item type.
+        - in: query
+          name: year
+          schema:
+            type: integer
+            minimum: 1800
+            maximum: 3000
+          description: Filter by an exact release year.
+        - in: query
+          name: year_min
+          schema:
+            type: integer
+            minimum: 1800
+            maximum: 3000
+          description: Filter by minimum release year.
+        - in: query
+          name: year_max
+          schema:
+            type: integer
+            minimum: 1800
+            maximum: 3000
+          description: Filter by maximum release year.
+        - in: query
+          name: has_tmdb
+          schema:
+            type: boolean
+          description: Filter by presence of TMDB metadata.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number starting at 1.
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            default: 25
+            minimum: 1
+            maximum: 100
+          description: Number of items per page.
+      responses:
+        '200':
+          description: Paginated library results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryList'
+  /library/metrics:
+    get:
+      summary: Retrieve library metrics
+      operationId: libraryMetrics
+      responses:
+        '200':
+          description: Aggregate library statistics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryMetrics'
   /library/{itemId}:
     get:
       summary: Fetch library item detail
@@ -366,3 +377,26 @@ components:
         - total
         - page
         - page_size
+    LibraryMetrics:
+      type: object
+      properties:
+        total:
+          type: integer
+        site_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        type_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        tmdb_enriched:
+          type: integer
+        tmdb_missing:
+          type: integer
+      required:
+        - total
+        - site_counts
+        - type_counts
+        - tmdb_enriched
+        - tmdb_missing

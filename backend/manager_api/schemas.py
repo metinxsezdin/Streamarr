@@ -82,3 +82,23 @@ class LibraryListModel(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class LibraryMetricsModel(BaseModel):
+    """Aggregate statistics for library catalog insights."""
+
+    total: int = Field(description="Total number of items in the catalog.")
+    site_counts: dict[str, int] = Field(
+        default_factory=dict,
+        description="Breakdown of items per source site.",
+    )
+    type_counts: dict[str, int] = Field(
+        default_factory=dict,
+        description="Breakdown of items per item type.",
+    )
+    tmdb_enriched: int = Field(
+        description="Number of items linked to TMDB metadata.",
+    )
+    tmdb_missing: int = Field(
+        description="Number of items missing TMDB enrichment.",
+    )

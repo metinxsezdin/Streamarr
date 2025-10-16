@@ -9,7 +9,12 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
 from ..models import LibraryItemRecord
-from ..schemas import LibraryItemModel, LibraryListModel, StreamVariantModel
+from ..schemas import (
+    LibraryItemModel,
+    LibraryListModel,
+    LibraryMetricsModel,
+    StreamVariantModel,
+)
 
 
 @dataclass(slots=True)
@@ -75,6 +80,50 @@ class LibraryStore:
         with Session(self.engine) as session:
             record = session.get(LibraryItemRecord, item_id)
             return _to_model(record) if record else None
+
+    def metrics(self) -> LibraryMetricsModel:
+        """Return aggregate statistics for the catalog."""
+
+        with Session(self.engine) as session:
+            total = session.exec(
+                select(func.count()).select_from(LibraryItemRecord)
+            ).scalar_one()
+
+            site_rows = session.exec(
+                select(LibraryItemRecord.site, func.count())
+                .group_by(LibraryItemRecord.site)
+                .order_by(LibraryItemRecord.site)
+            ).all()
+            site_counts: dict[str, int] = {}
+            for site, count in site_rows:
+                key = site or "unknown"
+                site_counts[key] = count
+
+            type_rows = session.exec(
+                select(LibraryItemRecord.item_type, func.count())
+                .group_by(LibraryItemRecord.item_type)
+                .order_by(LibraryItemRecord.item_type)
+            ).all()
+            type_counts: dict[str, int] = {}
+            for item_type, count in type_rows:
+                if item_type:
+                    type_counts[item_type] = count
+
+            tmdb_enriched = session.exec(
+                select(func.count()).select_from(LibraryItemRecord).where(
+                    LibraryItemRecord.tmdb_id.is_not(None)
+                )
+            ).scalar_one()
+
+        tmdb_missing = max(total - tmdb_enriched, 0)
+
+        return LibraryMetricsModel(
+            total=total,
+            site_counts=site_counts,
+            type_counts=type_counts,
+            tmdb_enriched=tmdb_enriched,
+            tmdb_missing=tmdb_missing,
+        )
 
 
 def _to_model(record: LibraryItemRecord) -> LibraryItemModel:

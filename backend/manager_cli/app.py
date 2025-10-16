@@ -212,6 +212,16 @@ def show_library_item(
         typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
 
 
+@library_app.command("metrics")
+def library_metrics(api_base: str = _api_base_option()) -> None:
+    """Display aggregate library statistics for dashboards."""
+
+    with create_client(api_base) as client:
+        response = client.get("/library/metrics")
+        response.raise_for_status()
+        typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
+
+
 @resolver_app.command("health")
 def resolver_health(api_base: str = _api_base_option()) -> None:
     """Display the proxied resolver health payload."""

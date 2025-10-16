@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..dependencies import get_library_store
-from ..schemas import LibraryItemModel, LibraryListModel
+from ..schemas import LibraryItemModel, LibraryListModel, LibraryMetricsModel
 from ..stores.library_store import LibraryStore
 
 router = APIRouter(prefix="/library", tags=["library"])
@@ -60,6 +60,13 @@ def list_library_items(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/metrics", response_model=LibraryMetricsModel)
+def library_metrics(store: LibraryStore = Depends(get_library_store)) -> LibraryMetricsModel:
+    """Return aggregate catalog statistics for dashboards."""
+
+    return store.metrics()
 
 
 @router.get("/{item_id}", response_model=LibraryItemModel)

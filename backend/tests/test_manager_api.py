@@ -221,6 +221,43 @@ def test_library_list_and_detail_round_trip(client: TestClient) -> None:
     assert detail["variants"][0]["quality"] == "1080p"
 
 
+def test_library_metrics_returns_aggregate_counts(client: TestClient) -> None:
+    """/library/metrics should surface aggregate catalog statistics."""
+
+    app_state = client.app.state.app_state
+    with Session(app_state.engine) as session:
+        session.add(
+            LibraryItemRecord(
+                id="movie-1",
+                title="Example Movie",
+                item_type="movie",
+                site="dizibox",
+                year=2024,
+                tmdb_id="tmdb-100",
+            )
+        )
+        session.add(
+            LibraryItemRecord(
+                id="episode-1",
+                title="Pilot Episode",
+                item_type="episode",
+                site="dizipal",
+                year=2019,
+            )
+        )
+        session.commit()
+
+    response = client.get("/library/metrics")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 2
+    assert payload["tmdb_enriched"] == 1
+    assert payload["tmdb_missing"] == 1
+    assert payload["site_counts"] == {"dizibox": 1, "dizipal": 1}
+    assert payload["type_counts"] == {"episode": 1, "movie": 1}
+
+
 def test_library_detail_returns_404_for_missing_item(client: TestClient) -> None:
     """GET /library/{id} should surface a 404 when the item is absent."""
 

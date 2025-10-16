@@ -204,6 +204,20 @@ def test_cli_library_list_outputs_metadata(
     assert "\"total\": 2" in result.output
 
 
+def test_cli_library_metrics_outputs_statistics(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """library metrics command should render aggregate counts."""
+
+    _seed_library(cli_client)
+
+    result = runner.invoke(cli_app, ["library", "metrics"])
+
+    assert result.exit_code == 0
+    assert "\"total\": 2" in result.output
+    assert "\"tmdb_enriched\": 1" in result.output
+
+
 def test_cli_library_list_supports_filters(
     runner: CliRunner, cli_client: TestClient
 ) -> None:
