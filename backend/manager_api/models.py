@@ -37,3 +37,21 @@ class JobRecord(SQLModel, table=True):
     error_message: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class LibraryItemRecord(SQLModel, table=True):
+    """Persisted library item metadata exposed through the manager."""
+
+    __tablename__ = "manager_library_items"
+
+    id: str = Field(primary_key=True, index=True)
+    title: str = Field(index=True)
+    item_type: str = Field(index=True)
+    site: str = Field(index=True)
+    year: int | None = Field(default=None, index=True)
+    tmdb_id: str | None = Field(default=None, index=True)
+    variants: list[dict[str, Any]] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False)
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)

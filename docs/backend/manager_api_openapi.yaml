@@ -69,18 +69,39 @@ paths:
       operationId: listJobs
       parameters:
         - in: query
-          name: status
+          name: limit
           schema:
-            type: string
-            enum: [queued, running, completed, failed]
-          description: Filter jobs by status.
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Number of recent jobs to return.
       responses:
         '200':
-          description: Paginated job list.
+          description: Recent job list.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JobList'
+                type: array
+                items:
+                  $ref: '#/components/schemas/Job'
+  /jobs/run:
+    post:
+      summary: Enqueue job
+      operationId: runJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobRunRequest'
+      responses:
+        '201':
+          description: Job enqueued and completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
   /jobs/{jobId}:
     get:
       summary: Fetch job detail
@@ -116,7 +137,7 @@ paths:
             type: integer
             default: 1
         - in: query
-          name: pageSize
+          name: page_size
           schema:
             type: integer
             default: 25
@@ -229,24 +250,17 @@ components:
         - type
         - status
         - progress
-    JobList:
+    JobRunRequest:
       type: object
       properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/Job'
-        total:
-          type: integer
-        page:
-          type: integer
-        page_size:
-          type: integer
+        type:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+          nullable: true
       required:
-        - items
-        - total
-        - page
-        - page_size
+        - type
     StreamVariant:
       type: object
       properties:

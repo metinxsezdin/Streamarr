@@ -5,21 +5,24 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import importlib
+
 import pytest
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
+from sqlmodel import Session
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.manager_api import create_app
-from backend.manager_api.settings import ManagerSettings
-import importlib
+from backend.manager_api import create_app  # noqa: E402
+from backend.manager_api.settings import ManagerSettings  # noqa: E402
+from backend.manager_api.models import LibraryItemRecord  # noqa: E402
+from backend.manager_cli import app as cli_app  # noqa: E402
+from backend.manager_cli import client as client_module  # noqa: E402
 
-from backend.manager_cli import app as cli_app
 cli_app_module = importlib.import_module("backend.manager_cli.app")
-from backend.manager_cli import client as client_module
 
 
 @pytest.fixture()
@@ -49,6 +52,43 @@ def cli_client(tmp_path: Path) -> TestClient:
 
     client_module.create_client = original_factory  # type: ignore[assignment]
     cli_app_module.create_client = original_app_factory  # type: ignore[assignment]
+
+
+def _seed_library(cli_client: TestClient) -> None:
+    app_state = cli_client.app.state.app_state
+    with Session(app_state.engine) as session:
+        session.add(
+            LibraryItemRecord(
+                id="movie-1",
+                title="Example Movie",
+                item_type="movie",
+                site="dizibox",
+                year=2024,
+                variants=[
+                    {
+                        "source": "dizibox",
+                        "quality": "1080p",
+                        "url": "http://resolver/stream/movie-1",
+                    }
+                ],
+            )
+        )
+        session.add(
+            LibraryItemRecord(
+                id="episode-1",
+                title="Pilot Episode",
+                item_type="episode",
+                site="dizipal",
+                variants=[
+                    {
+                        "source": "dizipal",
+                        "quality": "720p",
+                        "url": "http://resolver/stream/episode-1",
+                    }
+                ],
+            )
+        )
+        session.commit()
 
 
 def test_cli_health_command_outputs_status(runner: CliRunner, cli_client: TestClient) -> None:
@@ -83,3 +123,78 @@ def test_cli_config_update_modifies_store(runner: CliRunner, cli_client: TestCli
     persisted = cli_client.get("/config").json()
     assert persisted["html_title_fetch"] is False
     assert persisted["strm_output_path"] == "/data/strm"
+
+
+def test_cli_config_update_can_clear_tmdb_api_key(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """The CLI should allow clearing the stored TMDB API key."""
+
+    seed_result = runner.invoke(
+        cli_app,
+        [
+            "config",
+            "update",
+            "--tmdb-api-key",
+            "temporary-token",
+        ],
+    )
+
+    assert seed_result.exit_code == 0
+    assert "temporary-token" in seed_result.output
+    assert cli_client.get("/config").json()["tmdb_api_key"] == "temporary-token"
+
+    clear_result = runner.invoke(cli_app, ["config", "update", "--clear-tmdb-api-key"])
+
+    assert clear_result.exit_code == 0
+    assert "\"tmdb_api_key\": null" in clear_result.output
+    assert cli_client.get("/config").json()["tmdb_api_key"] is None
+
+
+def test_cli_jobs_run_creates_completed_job(runner: CliRunner, cli_client: TestClient) -> None:
+    """jobs run command should trigger a completed job."""
+
+    result = runner.invoke(cli_app, ["jobs", "run", "collect"])
+
+    assert result.exit_code == 0
+    assert "\"status\": \"completed\"" in result.output
+
+    jobs = cli_client.get("/jobs").json()
+    assert any(job["type"] == "collect" for job in jobs)
+
+
+def test_cli_jobs_list_outputs_recent_jobs(runner: CliRunner, cli_client: TestClient) -> None:
+    """jobs list command should display stored jobs."""
+
+    cli_client.post("/jobs/run", json={"type": "catalog"})
+
+    result = runner.invoke(cli_app, ["jobs", "list", "--limit", "5"])
+
+    assert result.exit_code == 0
+    assert "\"status\": \"completed\"" in result.output
+
+
+def test_cli_library_list_outputs_metadata(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """library list command should render library results."""
+
+    _seed_library(cli_client)
+
+    result = runner.invoke(cli_app, ["library", "list", "--page-size", "1"])
+
+    assert result.exit_code == 0
+    assert "\"total\": 2" in result.output
+
+
+def test_cli_library_show_outputs_item_detail(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """library show command should render item details."""
+
+    _seed_library(cli_client)
+
+    result = runner.invoke(cli_app, ["library", "show", "movie-1"])
+
+    assert result.exit_code == 0
+    assert "Example Movie" in result.output

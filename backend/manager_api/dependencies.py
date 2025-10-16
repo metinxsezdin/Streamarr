@@ -4,6 +4,8 @@ from sqlmodel import Session
 
 from .state import AppState
 from .stores.config_store import ConfigStore
+from .stores.job_store import JobStore
+from .stores.library_store import LibraryStore
 
 
 def get_app_state(request: Request) -> AppState:
@@ -14,6 +16,17 @@ def get_app_state(request: Request) -> AppState:
 def get_config_store(app_state: AppState = Depends(get_app_state)) -> ConfigStore:
     """Return the configuration store dependency."""
     return app_state.config_store
+
+
+def get_job_store(app_state: AppState = Depends(get_app_state)) -> JobStore:
+    """Return the job store dependency."""
+    return app_state.job_store
+
+
+def get_library_store(app_state: AppState = Depends(get_app_state)) -> LibraryStore:
+    """Return the library store dependency."""
+
+    return app_state.library_store
 
 
 def get_session(app_state: AppState = Depends(get_app_state)):

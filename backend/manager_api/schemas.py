@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -46,6 +46,15 @@ class JobModel(BaseModel):
     error_message: str | None = None
 
 
+class JobRunRequest(BaseModel):
+    """Payload used to enqueue a new manager job."""
+
+    type: str = Field(..., description="Job type identifier, e.g., collect or export.")
+    payload: dict[str, Any] | None = Field(
+        default=None, description="Optional JSON payload forwarded to the job runner."
+    )
+
+
 class StreamVariantModel(BaseModel):
     """Streaming variant metadata for library items."""
 
@@ -64,3 +73,12 @@ class LibraryItemModel(BaseModel):
     year: int | None = None
     tmdb_id: str | None = None
     variants: list[StreamVariantModel] = Field(default_factory=list)
+
+
+class LibraryListModel(BaseModel):
+    """Paginated list container for library responses."""
+
+    items: list[LibraryItemModel]
+    total: int
+    page: int
+    page_size: int
