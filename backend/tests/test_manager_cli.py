@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import importlib
+
 import pytest
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
@@ -13,13 +15,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.manager_api import create_app
-from backend.manager_api.settings import ManagerSettings
-import importlib
+from backend.manager_api import create_app  # noqa: E402
+from backend.manager_api.settings import ManagerSettings  # noqa: E402
+from backend.manager_cli import app as cli_app  # noqa: E402
+from backend.manager_cli import client as client_module  # noqa: E402
 
-from backend.manager_cli import app as cli_app
 cli_app_module = importlib.import_module("backend.manager_cli.app")
-from backend.manager_cli import client as client_module
 
 
 @pytest.fixture()
