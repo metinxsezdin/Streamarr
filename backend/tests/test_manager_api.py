@@ -84,12 +84,17 @@ def test_config_update_allows_clearing_tmdb_api_key(client: TestClient) -> None:
 def test_jobs_run_endpoint_creates_completed_job(client: TestClient) -> None:
     """POST /jobs/run should enqueue and complete a job synchronously."""
 
-    response = client.post("/jobs/run", json={"type": "collect"})
+    response = client.post(
+        "/jobs/run",
+        json={"type": "collect", "payload": {"full": True}},
+    )
 
     assert response.status_code == 201
     job = JobModel.model_validate(response.json())
     assert job.status == "completed"
     assert job.progress == 1.0
+    assert job.payload == {"full": True}
+    assert job.created_at <= job.updated_at
     assert job.started_at is not None
     assert job.finished_at is not None
 
@@ -102,6 +107,8 @@ def test_jobs_run_endpoint_creates_completed_job(client: TestClient) -> None:
     assert detail_response.status_code == 200
     detail = JobModel.model_validate(detail_response.json())
     assert detail.id == job.id
+    assert detail.payload == job.payload
+    assert detail.created_at <= detail.updated_at
 
 
 def test_jobs_detail_returns_404_for_missing_job(client: TestClient) -> None:

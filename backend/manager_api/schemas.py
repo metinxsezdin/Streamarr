@@ -41,6 +41,15 @@ class JobModel(BaseModel):
     type: str
     status: Literal["queued", "running", "completed", "failed"]
     progress: float = Field(ge=0, le=1)
+    payload: dict[str, Any] | None = Field(
+        default=None, description="Optional JSON payload forwarded to the runner."
+    )
+    created_at: datetime = Field(
+        description="Timestamp when the job record was created."
+    )
+    updated_at: datetime = Field(
+        description="Timestamp when the job record was last updated."
+    )
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error_message: str | None = None

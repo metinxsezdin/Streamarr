@@ -172,10 +172,16 @@ def test_cli_config_update_can_clear_tmdb_api_key(
 def test_cli_jobs_run_creates_completed_job(runner: CliRunner, cli_client: TestClient) -> None:
     """jobs run command should trigger a completed job."""
 
-    result = runner.invoke(cli_app, ["jobs", "run", "collect"])
+    result = runner.invoke(
+        cli_app,
+        ["jobs", "run", "collect", "--payload", '{"refresh": true}'],
+    )
 
     assert result.exit_code == 0
-    assert "\"status\": \"completed\"" in result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "completed"
+    assert payload["payload"] == {"refresh": True}
+    assert "created_at" in payload
 
     jobs = cli_client.get("/jobs").json()
     assert any(job["type"] == "collect" for job in jobs)
@@ -213,6 +219,35 @@ def test_cli_jobs_list_supports_filters(runner: CliRunner, cli_client: TestClien
     assert result.exit_code == 0
     assert "\"type\": \"collect\"" in result.output
     assert "\"type\": \"catalog\"" not in result.output
+
+
+def test_cli_jobs_show_displays_single_job(runner: CliRunner, cli_client: TestClient) -> None:
+    """jobs show should fetch job details from the API."""
+
+    response = cli_client.post(
+        "/jobs/run",
+        json={"type": "collect", "payload": {"full": True}},
+    )
+    job_id = response.json()["id"]
+
+    result = runner.invoke(cli_app, ["jobs", "show", job_id])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["id"] == job_id
+    assert payload["payload"] == {"full": True}
+
+
+def test_cli_jobs_show_handles_missing_job(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """jobs show should exit with an error when the job is not found."""
+
+    _ = cli_client
+    result = runner.invoke(cli_app, ["jobs", "show", "missing-id"])
+
+    assert result.exit_code == 1
+    assert "Job not found" in result.output
 
 
 def test_cli_library_list_outputs_metadata(
