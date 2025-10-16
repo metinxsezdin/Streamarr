@@ -8,15 +8,15 @@ from .state import AppState
 
 def create_app(settings: ManagerSettings | None = None) -> FastAPI:
     """Build and configure the FastAPI application."""
+
     resolved_settings = settings or ManagerSettings()
-    app = FastAPI(title="Streamarr Manager API", version="0.1.0")
-
     app_state = AppState(settings=resolved_settings)
-    app.state.settings = resolved_settings
-    app.state.app_state = app_state
 
-    app.include_router(health.router)
-    app.include_router(config.router)
-    app.include_router(jobs.router)
+    app = FastAPI(title="Streamarr Manager API", version="0.1.0")
+    app.state.app_state = app_state
+    app.state.settings = app_state.settings
+
+    for router in (health.router, config.router, jobs.router):
+        app.include_router(router)
 
     return app
