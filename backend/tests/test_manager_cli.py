@@ -86,6 +86,32 @@ def test_cli_config_update_modifies_store(runner: CliRunner, cli_client: TestCli
     assert persisted["strm_output_path"] == "/data/strm"
 
 
+def test_cli_config_update_can_clear_tmdb_api_key(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """The CLI should allow clearing the stored TMDB API key."""
+
+    seed_result = runner.invoke(
+        cli_app,
+        [
+            "config",
+            "update",
+            "--tmdb-api-key",
+            "temporary-token",
+        ],
+    )
+
+    assert seed_result.exit_code == 0
+    assert "temporary-token" in seed_result.output
+    assert cli_client.get("/config").json()["tmdb_api_key"] == "temporary-token"
+
+    clear_result = runner.invoke(cli_app, ["config", "update", "--clear-tmdb-api-key"])
+
+    assert clear_result.exit_code == 0
+    assert "\"tmdb_api_key\": null" in clear_result.output
+    assert cli_client.get("/config").json()["tmdb_api_key"] is None
+
+
 def test_cli_jobs_run_creates_completed_job(runner: CliRunner, cli_client: TestClient) -> None:
     """jobs run command should trigger a completed job."""
 

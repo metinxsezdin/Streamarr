@@ -58,6 +58,23 @@ def test_config_round_trip_updates_database_store(client: TestClient) -> None:
         assert getattr(persisted, key) == value
 
 
+def test_config_update_allows_clearing_tmdb_api_key(client: TestClient) -> None:
+    """Setting the TMDB key to null should clear the persisted value."""
+
+    seed_response = client.put("/config", json={"tmdb_api_key": "token"})
+    assert seed_response.status_code == 200
+    seeded = ConfigModel.model_validate(seed_response.json())
+    assert seeded.tmdb_api_key == "token"
+
+    clear_response = client.put("/config", json={"tmdb_api_key": None})
+    assert clear_response.status_code == 200
+    cleared = ConfigModel.model_validate(clear_response.json())
+    assert cleared.tmdb_api_key is None
+
+    persisted = ConfigModel.model_validate(client.get("/config").json())
+    assert persisted.tmdb_api_key is None
+
+
 def test_jobs_run_endpoint_creates_completed_job(client: TestClient) -> None:
     """POST /jobs/run should enqueue and complete a job synchronously."""
 

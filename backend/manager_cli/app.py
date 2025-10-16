@@ -53,6 +53,12 @@ def update_config(
     resolver_url: Optional[str] = typer.Option(None, help="Resolver service base URL."),
     strm_output_path: Optional[str] = typer.Option(None, help="Default STRM output directory."),
     tmdb_api_key: Optional[str] = typer.Option(None, help="TMDB API key to persist."),
+    clear_tmdb_api_key: bool = typer.Option(
+        False,
+        "--clear-tmdb-api-key/--no-clear-tmdb-api-key",
+        help="Remove the persisted TMDB API key.",
+        show_default=False,
+    ),
     html_title_fetch: Optional[bool] = typer.Option(
         None,
         "--html-title-fetch/--no-html-title-fetch",
@@ -63,12 +69,18 @@ def update_config(
 ) -> None:
     """Update configuration fields with the provided values."""
 
+    if tmdb_api_key is not None and clear_tmdb_api_key:
+        typer.echo("Cannot set and clear the TMDB API key in the same command.", err=True)
+        raise typer.Exit(code=1)
+
     payload: dict[str, object] = {}
     if resolver_url is not None:
         payload["resolver_url"] = resolver_url
     if strm_output_path is not None:
         payload["strm_output_path"] = strm_output_path
-    if tmdb_api_key is not None:
+    if clear_tmdb_api_key:
+        payload["tmdb_api_key"] = None
+    elif tmdb_api_key is not None:
         payload["tmdb_api_key"] = tmdb_api_key
     if html_title_fetch is not None:
         payload["html_title_fetch"] = html_title_fetch
