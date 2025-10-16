@@ -22,7 +22,7 @@ resolver_app = typer.Typer(help="Interact with the resolver service via the mana
 app.add_typer(resolver_app, name="resolver")
 
 
-JOB_STATUS_CHOICES = {"queued", "running", "completed", "failed"}
+JOB_STATUS_CHOICES = {"queued", "running", "completed", "failed", "cancelled"}
 
 
 def _api_base_option() -> typer.Option:
@@ -177,6 +177,34 @@ def show_job(
 
     with create_client(api_base) as client:
         response = client.get(f"/jobs/{job_id}")
+        if response.status_code == 404:
+            typer.echo("Job not found", err=True)
+            raise typer.Exit(code=1)
+        response.raise_for_status()
+        typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
+
+
+@jobs_app.command("cancel")
+def cancel_job(
+    job_id: str = typer.Argument(..., help="Identifier of the job to cancel."),
+    reason: Optional[str] = typer.Option(
+        None,
+        "--reason",
+        help="Optional reason recorded with the cancellation.",
+    ),
+    api_base: str = _api_base_option(),
+) -> None:
+    """Cancel a queued or running job via the Manager API."""
+
+    payload: dict[str, object] | None = None
+    if reason is not None:
+        payload = {"reason": reason}
+
+    with create_client(api_base) as client:
+        if payload is None:
+            response = client.post(f"/jobs/{job_id}/cancel")
+        else:
+            response = client.post(f"/jobs/{job_id}/cancel", json=payload)
         if response.status_code == 404:
             typer.echo("Job not found", err=True)
             raise typer.Exit(code=1)

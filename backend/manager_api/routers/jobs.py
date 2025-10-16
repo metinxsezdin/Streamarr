@@ -1,10 +1,10 @@
 """Job orchestration endpoints."""
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from ..dependencies import get_job_store
-from ..schemas import JobModel, JobRunRequest
+from ..schemas import JobCancelRequest, JobModel, JobRunRequest
 from ..stores.job_store import JobStore
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -52,3 +52,19 @@ def get_job(job_id: str, store: JobStore = Depends(get_job_store)) -> JobModel:
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@router.post("/{job_id}/cancel", response_model=JobModel)
+def cancel_job(
+    job_id: str,
+    request: JobCancelRequest | None = Body(default=None),
+    store: JobStore = Depends(get_job_store),
+) -> JobModel:
+    """Cancel a queued or running job, recording an optional reason."""
+
+    existing = store.get(job_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    reason = request.reason if request else None
+    return store.mark_cancelled(job_id, reason=reason)

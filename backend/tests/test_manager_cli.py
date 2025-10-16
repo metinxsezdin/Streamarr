@@ -250,6 +250,37 @@ def test_cli_jobs_show_handles_missing_job(
     assert "Job not found" in result.output
 
 
+def test_cli_jobs_cancel_marks_job_cancelled(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """jobs cancel should mark the job as cancelled and display it."""
+
+    app_state = cli_client.app.state.app_state
+    job = app_state.job_store.enqueue("collect")
+
+    result = runner.invoke(
+        cli_app,
+        ["jobs", "cancel", job.id, "--reason", "user requested"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["status"] == "cancelled"
+    assert payload["error_message"] == "user requested"
+
+
+def test_cli_jobs_cancel_handles_missing_job(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """jobs cancel should exit with an error when the job is not found."""
+
+    _ = cli_client
+    result = runner.invoke(cli_app, ["jobs", "cancel", "missing-id"])
+
+    assert result.exit_code == 1
+    assert "Job not found" in result.output
+
+
 def test_cli_library_list_outputs_metadata(
     runner: CliRunner, cli_client: TestClient
 ) -> None:

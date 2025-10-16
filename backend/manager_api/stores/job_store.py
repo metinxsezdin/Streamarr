@@ -97,6 +97,23 @@ class JobStore:
             error_message=error_message,
         )
 
+    def mark_cancelled(
+        self,
+        job_id: str,
+        *,
+        reason: str | None = None,
+        progress: float | None = None,
+    ) -> JobModel:
+        """Transition a job into the cancelled state."""
+
+        return self._update_job(
+            job_id,
+            status="cancelled",
+            progress=progress,
+            finished_at=datetime.utcnow(),
+            error_message=reason,
+        )
+
     def _update_job(
         self,
         job_id: str,

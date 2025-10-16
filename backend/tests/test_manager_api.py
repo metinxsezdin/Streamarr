@@ -133,14 +133,21 @@ def test_jobs_list_supports_status_and_type_filters(client: TestClient) -> None:
     job_store.mark_failed(failed.id, error_message="pipeline failed", progress=0.5)
 
     queued = job_store.enqueue("catalog")
+    cancelled = job_store.enqueue("collect")
+    job_store.mark_cancelled(cancelled.id, reason="user aborted")
 
     status_response = client.get(
         "/jobs",
-        params=[("status", "completed"), ("status", "failed"), ("limit", "10")],
+        params=[
+            ("status", "completed"),
+            ("status", "failed"),
+            ("status", "cancelled"),
+            ("limit", "10"),
+        ],
     )
     assert status_response.status_code == 200
     status_payload = [JobModel.model_validate(item) for item in status_response.json()]
-    assert {job.status for job in status_payload} == {"completed", "failed"}
+    assert {job.status for job in status_payload} == {"completed", "failed", "cancelled"}
     assert all(job.id != queued.id for job in status_payload)
 
     type_response = client.get("/jobs", params={"type": "collect", "limit": 10})
@@ -149,6 +156,40 @@ def test_jobs_list_supports_status_and_type_filters(client: TestClient) -> None:
     assert {job.type for job in type_payload} == {"collect"}
     assert any(job.id == failed.id for job in type_payload)
     assert all(job.id != queued.id for job in type_payload)
+
+
+def test_jobs_cancel_endpoint_marks_job_cancelled(client: TestClient) -> None:
+    """POST /jobs/{id}/cancel should mark a job as cancelled."""
+
+    app_state = client.app.state.app_state
+    job_store = app_state.job_store
+
+    job = job_store.enqueue("collect")
+
+    response = client.post(
+        f"/jobs/{job.id}/cancel",
+        json={"reason": "user requested"},
+    )
+
+    assert response.status_code == 200
+    payload = JobModel.model_validate(response.json())
+    assert payload.status == "cancelled"
+    assert payload.error_message == "user requested"
+    assert payload.finished_at is not None
+
+    detail_response = client.get(f"/jobs/{job.id}")
+    assert detail_response.status_code == 200
+    detail = JobModel.model_validate(detail_response.json())
+    assert detail.status == "cancelled"
+    assert detail.error_message == "user requested"
+
+
+def test_jobs_cancel_returns_404_for_missing_job(client: TestClient) -> None:
+    """POST /jobs/{id}/cancel should return 404 when the job is missing."""
+
+    response = client.post("/jobs/missing/cancel")
+
+    assert response.status_code == 404
 
 
 def test_library_list_and_detail_round_trip(client: TestClient) -> None:

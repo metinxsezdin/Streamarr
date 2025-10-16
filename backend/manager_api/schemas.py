@@ -39,7 +39,7 @@ class JobModel(BaseModel):
 
     id: str
     type: str
-    status: Literal["queued", "running", "completed", "failed"]
+    status: Literal["queued", "running", "completed", "failed", "cancelled"]
     progress: float = Field(ge=0, le=1)
     payload: dict[str, Any] | None = Field(
         default=None, description="Optional JSON payload forwarded to the runner."
@@ -61,6 +61,14 @@ class JobRunRequest(BaseModel):
     type: str = Field(..., description="Job type identifier, e.g., collect or export.")
     payload: dict[str, Any] | None = Field(
         default=None, description="Optional JSON payload forwarded to the job runner."
+    )
+
+
+class JobCancelRequest(BaseModel):
+    """Payload used when cancelling a job."""
+
+    reason: str | None = Field(
+        default=None, description="Optional reason recorded with the cancellation."
     )
 
 
