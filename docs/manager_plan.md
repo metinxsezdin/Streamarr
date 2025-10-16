@@ -266,11 +266,11 @@ Create a cross-platform control panel for Streamarr using Expo (React Native) fo
    - ✅ Add queue health checks, metrics, and alerting hooks to surface failures early (`/health` and `/jobs/metrics` report queue status and depth).
    - ✅ Document migration steps for existing CLI users and background task backlog (`docs/backend/queue_migration.md`).
 3. **Phase 2**: Expo app foundation
-   - Setup project, navigation, auth, basic dashboard.
-   - First-run wizard: collect backend URL, TMDB key, resolver base.
-   - Auth (token issuance, SecureStore persistence).
-   - Config screen to POST to backend, validation + error messaging.
-   - Basic dashboard cards + pipeline trigger button.
+   - [x] Setup Expo workspace with router navigation, themed layout, and shared data providers.
+   - [x] First-run wizard to collect backend URL, resolver base, STRM yolu, TMDB anahtarı ve `/setup` çağrısı.
+   - [x] Oturum yönetimi: token alanı, SecureStore/localStorage yedeği ve API istemcisi oluşturma.
+   - [x] Ayarlar ekranı ile `/config` okuma/güncelleme ve hata durumları için mesajlama.
+   - [x] Dashboard kartları + `/jobs/run` tetikleyen pipeline butonu ve `/jobs/metrics` görünümü.
 4. **Phase 3**: Library + Jobs modules
    - Library list, detail view, job list/log streaming.
    - STRM regenerate action from UI.
