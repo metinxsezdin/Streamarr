@@ -212,6 +212,24 @@ def cancel_job(
         typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
 
 
+@jobs_app.command("logs")
+def job_logs(
+    job_id: str = typer.Argument(..., help="Identifier of the job to inspect."),
+    limit: int = typer.Option(50, min=1, max=500, help="Maximum number of log entries."),
+    api_base: str = _api_base_option(),
+) -> None:
+    """Display persisted log events for a job."""
+
+    params = {"limit": limit}
+    with create_client(api_base) as client:
+        response = client.get(f"/jobs/{job_id}/logs", params=params)
+        if response.status_code == 404:
+            typer.echo("Job not found", err=True)
+            raise typer.Exit(code=1)
+        response.raise_for_status()
+        typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
+
+
 @library_app.command("list")
 def list_library(
     page: int = typer.Option(1, min=1, help="Page number starting at 1."),

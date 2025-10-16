@@ -5,6 +5,7 @@ from sqlmodel import Session
 from .services import ResolverService
 from .state import AppState
 from .stores.config_store import ConfigStore
+from .stores.job_log_store import JobLogStore
 from .stores.job_store import JobStore
 from .stores.library_store import LibraryStore
 
@@ -22,6 +23,12 @@ def get_config_store(app_state: AppState = Depends(get_app_state)) -> ConfigStor
 def get_job_store(app_state: AppState = Depends(get_app_state)) -> JobStore:
     """Return the job store dependency."""
     return app_state.job_store
+
+
+def get_job_log_store(app_state: AppState = Depends(get_app_state)) -> JobLogStore:
+    """Return the job log store dependency."""
+
+    return app_state.job_log_store
 
 
 def get_library_store(app_state: AppState = Depends(get_app_state)) -> LibraryStore:

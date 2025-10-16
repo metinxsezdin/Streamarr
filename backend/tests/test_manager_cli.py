@@ -286,6 +286,41 @@ def test_cli_jobs_cancel_handles_missing_job(
     assert "Job not found" in result.output
 
 
+def test_cli_jobs_logs_prints_job_logs(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """jobs logs should display persisted log entries for the job."""
+
+    response = cli_client.post("/jobs/run", json={"type": "collect"})
+    job_id = response.json()["id"]
+
+    cli_client.post(
+        f"/jobs/{job_id}/logs",
+        json={"level": "error", "message": "failure", "context": {"step": 1}},
+    )
+
+    result = runner.invoke(
+        cli_app,
+        ["jobs", "logs", job_id, "--limit", "5"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert any(entry["message"] == "failure" for entry in payload)
+    assert any(entry["level"] == "info" for entry in payload)
+
+
+def test_cli_jobs_logs_handles_missing_job(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """jobs logs should exit with an error when the job is not found."""
+
+    result = runner.invoke(cli_app, ["jobs", "logs", "missing-id"])
+
+    assert result.exit_code == 1
+    assert "Job not found" in result.output
+
+
 def test_cli_library_list_outputs_metadata(
     runner: CliRunner, cli_client: TestClient
 ) -> None:

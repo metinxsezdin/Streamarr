@@ -10,6 +10,7 @@ from .db import create_engine_from_settings, init_database
 from .settings import ManagerSettings
 from .services import ResolverService
 from .stores.config_store import ConfigStore
+from .stores.job_log_store import JobLogStore
 from .stores.job_store import JobStore
 from .stores.library_store import LibraryStore
 
@@ -21,6 +22,7 @@ class AppState:
     settings: ManagerSettings
     config_store: ConfigStore
     job_store: JobStore
+    job_log_store: JobLogStore
     library_store: LibraryStore
     resolver_service: ResolverService
     engine: Engine
@@ -31,6 +33,7 @@ class AppState:
         init_database(self.engine, settings)
         self.config_store = ConfigStore(self.engine)
         self.job_store = JobStore(self.engine)
+        self.job_log_store = JobLogStore(self.engine)
         self.library_store = LibraryStore(self.engine)
         self.resolver_service = ResolverService()
 

@@ -62,6 +62,27 @@ class JobModel(BaseModel):
     )
 
 
+class JobLogCreate(BaseModel):
+    """Payload used to append a new job log entry."""
+
+    level: Literal["debug", "info", "warning", "error"] = Field(
+        default="info", description="Severity level of the log entry."
+    )
+    message: str = Field(..., description="Human-readable log message.")
+    context: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional structured context payload for the log entry.",
+    )
+
+
+class JobLogModel(JobLogCreate):
+    """Represents a persisted job log entry."""
+
+    id: int
+    job_id: str
+    created_at: datetime
+
+
 class JobRunRequest(BaseModel):
     """Payload used to enqueue a new manager job."""
 

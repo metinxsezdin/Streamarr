@@ -15,7 +15,11 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from backend.manager_api import create_app  # noqa: E402
 from backend.manager_api.models import LibraryItemRecord  # noqa: E402
-from backend.manager_api.schemas import ConfigModel, JobModel  # noqa: E402
+from backend.manager_api.schemas import (  # noqa: E402
+    ConfigModel,
+    JobLogModel,
+    JobModel,
+)
 from backend.manager_api.services.resolver_service import (  # noqa: E402
     ResolverServiceError,
 )
@@ -114,6 +118,24 @@ def test_jobs_run_endpoint_creates_completed_job(client: TestClient) -> None:
     assert detail.created_at <= detail.updated_at
 
 
+def test_jobs_run_persists_log_entries(client: TestClient) -> None:
+    """Running a job should create structured log entries."""
+
+    response = client.post("/jobs/run", json={"type": "collect"})
+    job = JobModel.model_validate(response.json())
+
+    logs_response = client.get(f"/jobs/{job.id}/logs")
+    assert logs_response.status_code == 200
+    payload = [JobLogModel.model_validate(item) for item in logs_response.json()]
+    assert len(payload) == 3
+    messages = [entry.message for entry in payload]
+    assert messages == [
+        "Job collect enqueued",
+        "Job started",
+        "Job completed",
+    ]
+
+
 def test_jobs_detail_returns_404_for_missing_job(client: TestClient) -> None:
     """GET /jobs/{id} should return 404 when job does not exist."""
 
@@ -187,6 +209,46 @@ def test_jobs_cancel_endpoint_marks_job_cancelled(client: TestClient) -> None:
     detail = JobModel.model_validate(detail_response.json())
     assert detail.status == "cancelled"
     assert detail.error_message == "user requested"
+
+
+def test_job_logs_endpoints_support_manual_append(client: TestClient) -> None:
+    """POST /jobs/{id}/logs should append new entries retrievable via GET."""
+
+    created = client.post("/jobs/run", json={"type": "collect"})
+    job = JobModel.model_validate(created.json())
+
+    append_response = client.post(
+        f"/jobs/{job.id}/logs",
+        json={
+            "level": "error",
+            "message": "Job failed to fetch resource",
+            "context": {"status": 500},
+        },
+    )
+
+    assert append_response.status_code == 201
+    appended = JobLogModel.model_validate(append_response.json())
+    assert appended.level == "error"
+    assert appended.context == {"status": 500}
+
+    logs_response = client.get(
+        f"/jobs/{job.id}/logs", params={"limit": 5}
+    )
+    logs = [JobLogModel.model_validate(item) for item in logs_response.json()]
+    assert any(entry.message == "Job failed to fetch resource" for entry in logs)
+
+
+def test_job_logs_endpoints_handle_missing_job(client: TestClient) -> None:
+    """Log append and fetch endpoints should return 404 for unknown jobs."""
+
+    append_response = client.post(
+        "/jobs/missing/logs",
+        json={"message": "unknown", "level": "info"},
+    )
+    assert append_response.status_code == 404
+
+    fetch_response = client.get("/jobs/missing/logs")
+    assert fetch_response.status_code == 404
 
 
 def test_jobs_cancel_returns_404_for_missing_job(client: TestClient) -> None:

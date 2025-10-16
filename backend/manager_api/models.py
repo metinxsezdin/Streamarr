@@ -40,6 +40,21 @@ class JobRecord(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
 
+class JobLogRecord(SQLModel, table=True):
+    """Structured log event associated with a manager job."""
+
+    __tablename__ = "manager_job_logs"
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: str = Field(index=True)
+    level: str = Field(default="info", index=True)
+    message: str
+    context: dict[str, Any] | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
 class LibraryItemRecord(SQLModel, table=True):
     """Persisted library item metadata exposed through the manager."""
 
