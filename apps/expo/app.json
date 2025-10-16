@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Streamarr Manager",
+    "slug": "streamarr-manager",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "streamarr-manager",
+    "platforms": ["ios", "android", "web"],
+    "jsEngine": "hermes",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
