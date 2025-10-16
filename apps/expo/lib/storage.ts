@@ -3,10 +3,7 @@ import { Platform } from "react-native";
 
 import type { ConfigModel } from "@/types/api";
 
-// SecureStore keys must be non-empty and only contain [A-Za-z0-9._-].
-// Replace legacy key containing a slash with a compliant key and migrate on read.
-const SESSION_STORAGE_KEY = "streamarr-manager.session";
-const LEGACY_SESSION_STORAGE_KEY = "streamarr-manager/session";
+const SESSION_STORAGE_KEY = "streamarr-manager/session";
 
 export interface PersistedSession {
   baseUrl: string;
@@ -54,19 +51,7 @@ export async function saveSession(session: PersistedSession): Promise<void> {
 
 export async function loadSession(): Promise<PersistedSession | null> {
   if (await secureStoreAvailable()) {
-    // Try new key first
-    let value = await SecureStore.getItemAsync(SESSION_STORAGE_KEY);
-    // If missing, attempt migration from legacy key
-    if (!value) {
-      const legacyValue = await SecureStore.getItemAsync(LEGACY_SESSION_STORAGE_KEY);
-      if (legacyValue) {
-        // Persist under the new key and clean up legacy
-        await SecureStore.setItemAsync(SESSION_STORAGE_KEY, legacyValue);
-        await SecureStore.deleteItemAsync(LEGACY_SESSION_STORAGE_KEY);
-        value = legacyValue;
-      }
-    }
-
+    const value = await SecureStore.getItemAsync(SESSION_STORAGE_KEY);
     if (!value) {
       return null;
     }
@@ -100,8 +85,6 @@ export async function loadSession(): Promise<PersistedSession | null> {
 export async function clearSession(): Promise<void> {
   if (await secureStoreAvailable()) {
     await SecureStore.deleteItemAsync(SESSION_STORAGE_KEY);
-    // Also remove any lingering legacy key
-    await SecureStore.deleteItemAsync(LEGACY_SESSION_STORAGE_KEY);
   }
 
   const storage = getBrowserStorage();
