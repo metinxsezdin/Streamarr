@@ -24,6 +24,9 @@ class LibraryStore:
         query: str | None,
         site: str | None,
         item_type: str | None,
+        year: int | None,
+        year_min: int | None,
+        year_max: int | None,
         has_tmdb: bool | None,
         page: int,
         page_size: int,
@@ -38,6 +41,14 @@ class LibraryStore:
             filters.append(func.lower(LibraryItemRecord.site) == site.lower())
         if item_type:
             filters.append(LibraryItemRecord.item_type == item_type)
+        if year is not None:
+            filters.append(LibraryItemRecord.year == year)
+        if year_min is not None:
+            filters.append(LibraryItemRecord.year.is_not(None))
+            filters.append(LibraryItemRecord.year >= year_min)
+        if year_max is not None:
+            filters.append(LibraryItemRecord.year.is_not(None))
+            filters.append(LibraryItemRecord.year <= year_max)
         if has_tmdb is True:
             filters.append(LibraryItemRecord.tmdb_id.is_not(None))
         elif has_tmdb is False:

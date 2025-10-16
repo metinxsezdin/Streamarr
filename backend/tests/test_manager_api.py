@@ -142,6 +142,7 @@ def test_library_list_and_detail_round_trip(client: TestClient) -> None:
                 title="Pilot Episode",
                 item_type="episode",
                 site="dizipal",
+                year=2019,
                 variants=[
                     {
                         "source": "dizipal",
@@ -194,6 +195,24 @@ def test_library_list_and_detail_round_trip(client: TestClient) -> None:
     missing_tmdb_payload = missing_tmdb_response.json()
     assert missing_tmdb_payload["total"] == 1
     assert missing_tmdb_payload["items"][0]["id"] == "episode-1"
+
+    year_response = client.get("/library", params={"year": 2024})
+    assert year_response.status_code == 200
+    year_payload = year_response.json()
+    assert year_payload["total"] == 1
+    assert year_payload["items"][0]["id"] == "movie-1"
+
+    year_min_response = client.get("/library", params={"year_min": 2020})
+    assert year_min_response.status_code == 200
+    year_min_payload = year_min_response.json()
+    assert year_min_payload["total"] == 1
+    assert year_min_payload["items"][0]["id"] == "movie-1"
+
+    year_max_response = client.get("/library", params={"year_max": 2019})
+    assert year_max_response.status_code == 200
+    year_max_payload = year_max_response.json()
+    assert year_max_payload["total"] == 1
+    assert year_max_payload["items"][0]["id"] == "episode-1"
 
     detail_response = client.get("/library/movie-1")
     assert detail_response.status_code == 200

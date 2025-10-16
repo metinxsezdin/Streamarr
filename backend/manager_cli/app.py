@@ -149,6 +149,24 @@ def list_library(
     item_type: Optional[str] = typer.Option(
         None, help="Filter results by item type (movie or episode)."
     ),
+    year: Optional[int] = typer.Option(
+        None,
+        min=1800,
+        max=3000,
+        help="Filter results by an exact release year.",
+    ),
+    year_min: Optional[int] = typer.Option(
+        None,
+        min=1800,
+        max=3000,
+        help="Filter results to items released on or after this year.",
+    ),
+    year_max: Optional[int] = typer.Option(
+        None,
+        min=1800,
+        max=3000,
+        help="Filter results to items released on or before this year.",
+    ),
     has_tmdb: Optional[bool] = typer.Option(
         None,
         "--has-tmdb/--no-has-tmdb",
@@ -166,6 +184,12 @@ def list_library(
         params["site"] = site
     if item_type:
         params["item_type"] = item_type
+    if year is not None:
+        params["year"] = year
+    if year_min is not None:
+        params["year_min"] = year_min
+    if year_max is not None:
+        params["year_max"] = year_max
     if has_tmdb is not None:
         params["has_tmdb"] = has_tmdb
 

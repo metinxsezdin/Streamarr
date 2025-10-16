@@ -95,6 +95,7 @@ def _seed_library(cli_client: TestClient) -> None:
                 title="Pilot Episode",
                 item_type="episode",
                 site="dizipal",
+                year=2019,
                 variants=[
                     {
                         "source": "dizipal",
@@ -219,6 +220,12 @@ def test_cli_library_list_supports_filters(
             "dizipal",
             "--item-type",
             "episode",
+            "--year",
+            "2019",
+            "--year-min",
+            "2010",
+            "--year-max",
+            "2019",
             "--no-has-tmdb",
         ],
     )

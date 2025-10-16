@@ -145,6 +145,27 @@ paths:
                 - episode
             description: Filter by item type.
           - in: query
+            name: year
+            schema:
+              type: integer
+              minimum: 1800
+              maximum: 3000
+            description: Filter by an exact release year.
+          - in: query
+            name: year_min
+            schema:
+              type: integer
+              minimum: 1800
+              maximum: 3000
+            description: Filter by minimum release year.
+          - in: query
+            name: year_max
+            schema:
+              type: integer
+              minimum: 1800
+              maximum: 3000
+            description: Filter by maximum release year.
+          - in: query
             name: has_tmdb
             schema:
               type: boolean
