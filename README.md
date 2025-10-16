@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 [![Streamarr Preview](images/Streamarr.png)](images/Streamarr.png)
 
@@ -49,7 +49,7 @@ The resolver API ships with a ready-to-use Docker configuration.
 # Build and start the resolver API
 docker compose up -d
 
-# The API is now available at http://127.0.0.1:5055
+# The API is now available at http://192.168.0.15:5055
 ```
 
 By default the container mounts ./data inside /app/data, so any catalog updates on the host are immediately visible. Environment variables you can override:
@@ -78,8 +78,11 @@ docker compose down
    ```bash
    python scripts/collect_links.py --site hdfilm
    python scripts/collect_links.py --site dizibox --max-shows 100
-```
-   Outputs are written to data/hdfilm_links.json and data/dizibox_links.json.
+
+   # reuse cached HDFilm sitemap responses (skips ones fetched in the last 12h)
+   python scripts/collect_links.py --site hdfilm --sitemap-delay 0.5 --sitemap-ttl 43200
+   ```
+   Outputs are written to data/hdfilm_links.json and data/dizibox_links.json. When sitemap caching is enabled, cache metadata is stored at data/hdfilm_sitemap_cache.json by default.
 
 3. **Build Catalog**
    ```bash
@@ -107,7 +110,7 @@ docker compose down
 
 4. **Generate STRM Files**
    ```bash
-   python scripts/strm_generator.py --resolver-base http://127.0.0.1:5055
+   python scripts/strm_generator.py --resolver-base http://192.168.0.15:5055
 ```
    Creates STRM files under output/strm/. Point Jellyfin at this folder as a virtual library.
 

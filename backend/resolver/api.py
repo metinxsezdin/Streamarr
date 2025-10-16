@@ -8,8 +8,10 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional, Set, Tuple
+from typing import Dict, Optional, Set, Tuple, List
 from urllib.parse import quote, quote_plus, unquote, urljoin, urlparse
+import re
+from copy import deepcopy
 
 import requests
 from flask import Flask, Response, jsonify, redirect, request, stream_with_context
@@ -33,11 +35,90 @@ RELAY_SITES = {"hdfilm", "dizipub", "dizipal", "dizilla"}
 _DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0"
 DEFAULT_REFERERS = {
     "hdfilm": "https://www.hdfilmcehennemi.la/",
-   "dizipub": "https://dizipub.club/",
-   "dizipal": "https://dizipal1503.com/",
-   "dizilla": "https://dizilla40.com/",
+    "dizipub": "https://dizipub.club/",
+    "dizipal": "https://dizipal1503.com/",
+    "dizilla": "https://dizilla40.com/",
 }
 DEFAULT_SOURCE_PRIORITY = 100
+
+
+def _parse_resolution_token(token: Optional[str]) -> Tuple[int, int]:
+    if not token or not isinstance(token, str):
+        return 0, 0
+    match = re.search(r"(\d{3,4})\s*[xX]\s*(\d{3,4})", token)
+    if match:
+        try:
+            width = int(match.group(1))
+            height = int(match.group(2))
+            return width, height
+        except ValueError:
+            return 0, 0
+    match = re.search(r"(\d{3,4})p", token, re.IGNORECASE)
+    if match:
+        try:
+            height = int(match.group(1))
+            # assume 16:9 aspect ratio when width missing
+            width = height * 16 // 9
+            return width, height
+        except ValueError:
+            return 0, 0
+    return 0, 0
+
+
+def _variant_sort_key(variant: Dict[str, object], index: int) -> Tuple[int, int, int, int]:
+    width, height = _parse_resolution_token(variant.get("resolution"))
+    awidth, aheight = _parse_resolution_token(variant.get("quality"))
+    width = max(width, awidth)
+    height = max(height, aheight)
+
+    resolution_score = width * height if width and height else height * height
+
+    bandwidth = 0
+    try:
+        candidate = variant.get("bandwidth")
+        if candidate is not None:
+            bandwidth = int(candidate)
+    except (ValueError, TypeError):
+        bandwidth = 0
+
+    # prefer variants with explicit playlist text only if nothing else
+    has_playlist = 1 if variant.get("playlist") else 0
+
+    return (resolution_score, height, bandwidth, has_playlist, -index)
+
+
+def _select_best_variant(variants: Optional[List[Dict[str, object]]]) -> Optional[Tuple[int, Dict[str, object]]]:
+    if not variants:
+        return None
+    best_index = -1
+    best_variant: Optional[Dict[str, object]] = None
+    best_score = (-1, -1, -1, -1, 0)
+    for idx, variant in enumerate(variants):
+        if not isinstance(variant, dict):
+            continue
+        score = _variant_sort_key(variant, idx)
+        if score > best_score:
+            best_score = score
+            best_variant = variant
+            best_index = idx
+    if best_variant is None:
+        return None
+    return best_index, best_variant
+
+
+def _decorate_best_variant(result: Optional[Dict[str, object]]) -> None:
+    if not isinstance(result, dict):
+        return
+    variants = result.get("variants")
+    best_info = _select_best_variant(variants if isinstance(variants, list) else None)
+    if not best_info:
+        return
+    best_index, best_variant = best_info
+    result["best_variant_index"] = best_index
+    result["best_variant"] = deepcopy(best_variant)
+    best_url = best_variant.get("url")
+    if isinstance(best_url, str) and best_url:
+        result["preferred_stream_url"] = best_url
 
 
 def _cleanup_expired() -> None:
@@ -261,6 +342,9 @@ def _resolve_stream_url(site: str, result: Dict) -> str:
         )
     else:
         base = result.get("stream_url") or ""
+    preferred = result.get("preferred_stream_url")
+    if isinstance(preferred, str) and preferred:
+        base = preferred
     return _apply_proxy(site, base, result)
 
 
@@ -358,6 +442,7 @@ def _get_site_headers(site: str, result: Dict) -> Dict[str, str]:
 
 
 def _build_token_payload(token: str, expires_at: float, data: Dict) -> Dict[str, object]:
+    _decorate_best_variant((data or {}).get("result"))
     stream_url = _resolve_stream_url(data["site"], data["result"])
     return {
         "token": token,
@@ -372,13 +457,16 @@ def _build_token_payload(token: str, expires_at: float, data: Dict) -> Dict[str,
 def _serve_hls_master(token: str, data: Dict) -> Response:
     site = data.get("site")
     result = data.get("result") or {}
+    _decorate_best_variant(result)
     master_url = (
         result.get("master_url")
         or result.get("playlist_url")
         or result.get("quality_url")
         or result.get("stream_url")
     )
-    variants = result.get("variants") or []
+    original_variants = result.get("variants") or []
+    best_variant = result.get("best_variant") if isinstance(result.get("best_variant"), dict) else None
+    variants = [best_variant] if best_variant else list(original_variants)
     raw_playlist = result.get("raw_playlist")
 
     if not master_url and not raw_playlist:
@@ -399,7 +487,12 @@ def _serve_hls_master(token: str, data: Dict) -> Response:
 
     base_url = request.url_root.rstrip("/")
     lines = ["#EXTM3U"]
-    for index, variant in enumerate(variants):
+    if best_variant and isinstance(result.get("best_variant_index"), int):
+        variant_entries = [(int(result.get("best_variant_index")), best_variant)]
+    else:
+        variant_entries = [(idx, variant) for idx, variant in enumerate(variants)]
+
+    for original_index, variant in variant_entries:
         attributes: list[str] = []
         bandwidth = variant.get("bandwidth")
         if bandwidth:
@@ -422,7 +515,7 @@ def _serve_hls_master(token: str, data: Dict) -> Response:
             lines.append(f"#EXT-X-STREAM-INF:{attr_line}")
         else:
             lines.append("#EXT-X-STREAM-INF:")
-        proxied = f"{base_url}/proxy/{token}?variant={index}"
+        proxied = f"{base_url}/proxy/{token}?variant={original_index}"
         lines.append(proxied)
     lines.append("")
     return Response("\n".join(lines), content_type="application/vnd.apple.mpegurl")
@@ -465,6 +558,8 @@ def resolve_route() -> tuple[Response, int]:
         cached = _get_cached_token_for_entry(entry.get("id") if entry else None, site, url)
         if cached:
             token, cached_payload = cached
+            cached_data = cached_payload.get("data") or {}
+            _decorate_best_variant(cached_data.get("result"))
             response = _build_token_payload(token, cached_payload["expires_at"], cached_payload["data"])
             return jsonify(response), 200
 
@@ -478,6 +573,7 @@ def resolve_route() -> tuple[Response, int]:
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
+    _decorate_best_variant((data or {}).get("result"))
     token, expires_at_ts = _store_token(data)
     cache_entry_id = entry.get("id") if entry else None
     _cache_token_for_entry(cache_entry_id, site, url, token, expires_at_ts)
@@ -493,6 +589,7 @@ def stream_route(token: str):
         return {"error": "Token not found or expired"}, 404
 
     data = payload["data"]
+    _decorate_best_variant(data.get("result"))
     if request.args.get("format") == "json":
         response = _build_token_payload(token, payload["expires_at"], data)
         response.update(
@@ -539,6 +636,8 @@ def play_route(content_id: str):
         cached = _get_cached_token_for_entry(entry_id, site, url)
         if cached:
             token, cached_payload = cached
+            cached_data = cached_payload.get("data") or {}
+            _decorate_best_variant(cached_data.get("result"))
             if request.args.get("format") == "json":
                 response = _build_token_payload(token, cached_payload["expires_at"], cached_payload["data"])
                 return jsonify(response), 200
@@ -559,6 +658,7 @@ def play_route(content_id: str):
             errors.append({"error": str(exc), "site": site, "url": url})
             continue
 
+        _decorate_best_variant(data.get("result"))
         token, expires_at_ts = _store_token(data)
         _cache_token_for_entry(entry_id, site, url, token, expires_at_ts)
         if request.args.get("format") == "json":
@@ -614,6 +714,7 @@ def proxy_route(token: str, subpath: str | None = None):
         return {"error": "Proxy only supported for relay-enabled sites"}, 400
 
     result = data.get("result") or {}
+    _decorate_best_variant(result)
     headers = _get_site_headers(site, result)
     variants = result.get("variants") or []
     variant_param = request.args.get("variant")

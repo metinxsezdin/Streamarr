@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, List, Set
+from typing import Dict, Iterable, List, Optional, Set
 from urllib.parse import urljoin, urlparse
 
 import requests
@@ -47,6 +47,39 @@ class CollectionResult:
             "urls": self.urls,
         }
         return json.dumps(payload, indent=2, ensure_ascii=False)
+
+
+def _parse_cache_timestamp(value: object) -> Optional[float]:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            try:
+                return datetime.fromisoformat(value).timestamp()
+            except ValueError:
+                return None
+    return None
+
+
+def load_sitemap_cache(cache_path: Optional[Path]) -> Dict[str, Dict[str, object]]:
+    if cache_path is None or not cache_path.exists():
+        return {}
+    try:
+        data = json.loads(cache_path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return data
+    except Exception as exc:
+        print(f"[hdfilm] unable to load sitemap cache: {exc}", file=sys.stderr)
+    return {}
+
+
+def save_sitemap_cache(cache_path: Path, cache_data: Dict[str, Dict[str, object]]) -> None:
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(cache_data, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp_path.replace(cache_path)
 
 
 def fetch_text(session: requests.Session, url: str) -> str:
@@ -179,14 +212,58 @@ def collect_dizibox_episodes(max_shows: int | None = None) -> Set[str]:
         return episodes
 
 
-def collect_hdfilm(limit: int | None = None) -> Set[str]:
+def collect_hdfilm(
+    limit: int | None = None,
+    *,
+    cache_path: Optional[Path] = None,
+    cache_ttl: float = 0.0,
+    delay: float = 0.0,
+) -> Set[str]:
     session = requests.Session()
     session.headers.update(REQUEST_HEADERS)
     sitemap_urls = list(iter_hdfilm_sitemaps(session))
     if limit is not None:
         sitemap_urls = sitemap_urls[:limit]
+
+    cache_data: Dict[str, Dict[str, object]] = load_sitemap_cache(cache_path)
+    now_ts = time.time()
+    ttl_seconds = max(cache_ttl or 0.0, 0.0)
+    collected: Set[str] = set()
+    skipped = 0
+    fetched = 0
+
     print(f"[hdfilm] scanning {len(sitemap_urls)} sitemap files")
-    return extract_hdfilm_urls(session, sitemap_urls)
+    for idx, sitemap_url in enumerate(sitemap_urls, 1):
+        cached_entry = cache_data.get(sitemap_url) if cache_data else None
+        use_cache = False
+        if cached_entry and ttl_seconds > 0:
+            cached_ts = _parse_cache_timestamp(cached_entry.get("checked_at"))
+            if cached_ts is not None and (now_ts - cached_ts) < ttl_seconds:
+                urls = cached_entry.get("urls") or []
+                if isinstance(urls, list):
+                    collected.update(urls)
+                use_cache = True
+                skipped += 1
+
+        if use_cache:
+            continue
+
+        urls = extract_hdfilm_urls(session, [sitemap_url])
+        fetched += 1
+        collected.update(urls)
+        if cache_path is not None:
+            cache_data[sitemap_url] = {
+                "checked_at": now_ts,
+                "urls": sorted(urls),
+            }
+        if delay > 0 and idx < len(sitemap_urls):
+            time.sleep(delay)
+
+    if cache_path is not None:
+        save_sitemap_cache(cache_path, cache_data)
+
+    print(f"[hdfilm] fetched {fetched} sitemap files ({skipped} served from cache)")
+    return collected
 
 
 def write_output(result: CollectionResult, output_path: Path) -> None:
@@ -201,6 +278,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=None, help="Optional limit for HDFilm sitemaps")
     parser.add_argument("--max-shows", type=int, default=None, help="Optional cap on number of Dizibox shows")
     parser.add_argument(
+        "--sitemap-cache",
+        type=Path,
+        default=None,
+        help="Optional cache file for HDFilm sitemap fetches (default: data/hdfilm_sitemap_cache.json when caching is enabled)",
+    )
+    parser.add_argument(
+        "--sitemap-ttl",
+        type=float,
+        default=86400.0,
+        help="Seconds to reuse cached HDFilm sitemap entries before refetching (default: 86400, set to 0 to always refetch)",
+    )
+    parser.add_argument(
+        "--sitemap-delay",
+        type=float,
+        default=0.0,
+        help="Delay in seconds between HDFilm sitemap requests",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
@@ -212,7 +307,17 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     if args.site == "hdfilm":
-        urls = sorted(collect_hdfilm(limit=args.limit))
+        cache_path = args.sitemap_cache
+        if cache_path is None and args.sitemap_ttl and args.sitemap_ttl > 0:
+            cache_path = ROOT_DIR / "data" / "hdfilm_sitemap_cache.json"
+        urls = sorted(
+            collect_hdfilm(
+                limit=args.limit,
+                cache_path=cache_path,
+                cache_ttl=max(args.sitemap_ttl, 0.0),
+                delay=max(args.sitemap_delay, 0.0),
+            )
+        )
     else:
         urls = sorted(collect_dizibox_episodes(max_shows=args.max_shows))
 

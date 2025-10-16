@@ -743,14 +743,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--hdfilm-source",
         type=Path,
-        default=ROOT_DIR / "data/hdfilm_links_sample.json",
-        help="Path to JSON list of HDFilm URLs",
+        default=ROOT_DIR / "data/hdfilm_links.json",
+        help="Path to JSON list of HDFilm URLs (defaults to data/hdfilm_links.json)",
     )
     parser.add_argument(
         "--dizibox-source",
         type=Path,
-        default=ROOT_DIR / "data/dizibox_links_sample.json",
-        help="Path to JSON list of Dizibox URLs",
+        default=ROOT_DIR / "data/dizibox_links.json",
+        help="Path to JSON list of Dizibox URLs (defaults to data/dizibox_links.json)",
     )
     parser.add_argument(
         "--output",
