@@ -8,7 +8,6 @@ import sys
 import time
 import json
 from typing import Optional, Dict, Any
-from urllib.parse import urljoin
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
