@@ -45,12 +45,12 @@ Streamarr harvests stream URLs from popular Turkish streaming sites, exposes the
 
 The resolver API ships with a ready-to-use Docker configuration.
 
-`ash
+```bash
 # Build and start the resolver API
 docker compose up -d
 
 # The API is now available at http://127.0.0.1:5055
-`
+```
 
 By default the container mounts ./data inside /app/data, so any catalog updates on the host are immediately visible. Environment variables you can override:
 
@@ -60,44 +60,52 @@ By default the container mounts ./data inside /app/data, so any catalog updates 
 
 To stop the container:
 
-`ash
+```bash
 docker compose down
-`
+```
 
 ---
 
 ## Resolver + STRM Workflow (Manual)
 
 1. **Install dependencies**
-   `ash
+   ```bash
    pip install -r requirements.txt
    playwright install firefox
-   `
+```
 
 2. **Harvest URLs**
-   `ash
+   ```bash
    python scripts/collect_links.py --site hdfilm
    python scripts/collect_links.py --site dizibox --max-shows 100
-   `
+```
    Outputs are written to data/hdfilm_links.json and data/dizibox_links.json.
 
 3. **Build Catalog**
-   `ash
-   python scripts/catalog_builder.py --tmdb-key ""
-   `
-   Generates data/catalog.json (falls back to minimal data if TMDB key is missing).
+   ```bash
+   # quick pass without TMDB enrichment
+   python scripts/catalog_builder.py --skip-tmdb --chunk-size 5000
+
+   # or enrich with TMDB metadata
+   python scripts/catalog_builder.py --tmdb-key "<TMDB_KEY>" --chunk-size 5000
+   ```
+   Outputs chunked files such as `data/catalog.001.json`, keeping each JSON small enough for editors. Leave out `--chunk-size` to emit a single `catalog.json`.
+
+   Useful flags:
+   - `--skip-tmdb` -> skip metadata lookups even if a TMDB key is configured.
+   - `--chunk-size <N>` -> split the catalog into files with at most `N` entries for easier inspection.
 
 4. **Generate STRM Files**
-   `ash
+   ```bash
    python scripts/strm_generator.py --resolver-base http://127.0.0.1:5055
-   `
+```
    Creates STRM files under output/strm/. Point Jellyfin at this folder as a virtual library.
 
 5. **Run Resolver API (non-docker)**
-   `ash
+   ```bash
    cd backend/resolver
    python api.py
-   `
+```
    Exposes:
    - POST /resolve – resolve an episode/movie URL
    - GET /stream/<token> – redirect/JSON with stream details
@@ -110,16 +118,16 @@ docker compose down
 
 ### Build & Package
 
-`ash
+```bash
 dotnet build plugins/Streamarr/StreamarrPlugin.csproj -c Release
-`
+```
 Artifacts appear in plugins/Streamarr/bin/Release/net8.0/ (StreamarrPlugin.dll, StreamarrPlugin.zip).
 
 ### Update Manifest
 
 Use the helper script to refresh version, checksum, and download URL before publishing:
 
-`ash
+```bash
 python scripts/update_manifest.py \
     --manifest docs/manifest.json \
     --zip plugins/Streamarr/bin/Release/net8.0/StreamarrPlugin.zip \
@@ -130,12 +138,12 @@ python scripts/update_manifest.py \
     --name Streamarr \
     --category General \
     --owner <user>
-`
+```
 
 ### Publish
 
 1. Upload StreamarrPlugin.zip and the updated manifest.json (e.g., GitHub Release or Pages)
-2. In Jellyfin: **Dashboard → Plugins → Repositories → Add** the manifest URL
+2. In Jellyfin: **Dashboard -> Plugins -> Repositories -> Add** the manifest URL
 3. Install "Streamarr" from the catalog
 4. Configure the resolver base URL/API key in the plugin settings page
 
@@ -143,15 +151,15 @@ python scripts/update_manifest.py \
 
 ## Command Summary
 
-`ash
+```bash
 python scripts/collect_links.py --site hdfilm
 python scripts/collect_links.py --site dizibox --max-shows 50
-python scripts/catalog_builder.py
+python scripts/catalog_builder.py --chunk-size 5000 --skip-tmdb
 python scripts/strm_generator.py
 python backend/resolver/api.py
 python scripts/update_manifest.py ...
 dotnet build plugins/Streamarr/StreamarrPlugin.csproj -c Release
-`
+```
 
 ---
 

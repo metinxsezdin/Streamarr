@@ -1,35 +1,55 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 
-rem Launch the Streamarr resolver API in the background using the project virtualenv.
+rem Navigate to repository root
+pushd "%~dp0"
 
-set "ROOT=%~dp0"
-set "VENV_PY=%ROOT%.venv\Scripts\python.exe"
+rem Activate virtual environment if present
+if exist ".venv\Scripts\activate.bat" (
+    call ".venv\Scripts\activate.bat"
+)
 
-if not exist "%VENV_PY%" (
-    echo [Streamarr] Virtualenv python not found at "%VENV_PY%".
-    echo [Streamarr] Run ^`python -m venv .venv^` and install requirements first.
+rem Load environment variables from .env (ignores comments and blank lines)
+if exist ".env" (
+    echo Loading environment from .env ...
+    for /f "usebackq eol=# tokens=1* delims==" %%A in (".env") do (
+        set "envName=%%A"
+        if defined envName (
+            set "envValue=%%B"
+            if defined envValue (
+                if "!envValue:~0,1!"==^" (
+                    if "!envValue:~-1!"==^" (
+                        set "envValue=!envValue:~1,-1!"
+                    )
+                )
+            )
+            set "!envName!=!envValue!"
+            echo   !envName!=!envValue!
+        )
+    )
+) else (
+    echo No .env file found. Using existing environment.
+)
+
+where python >nul 2>&1
+if errorlevel 1 (
+    echo Python interpreter not found. Install Python or ensure the virtual environment is set up.
+    popd
+    pause
     exit /b 1
 )
 
-if "%~1" NEQ "" (
-    set "PROXY_BASE_URL=%~1"
-)
+set "resolverPort=%RESOLVER_PORT%"
+if "%resolverPort%"=="" set "resolverPort=%PORT%"
+if "%resolverPort%"=="" set "resolverPort=5055"
 
-if "%PROXY_BASE_URL%" NEQ "" (
-    echo [Streamarr] Using PROXY_BASE_URL=%PROXY_BASE_URL%
-) else (
-    echo [Streamarr] PROXY_BASE_URL not set; playlists will reuse the incoming host.
-)
+echo Starting Streamarr resolver on port %resolverPort% ...
+python -m flask --app backend.resolver.api run --host 0.0.0.0 --port %resolverPort%
+set "exitCode=%ERRORLEVEL%"
 
-if not defined RESOLVER_PORT (
-    set "RESOLVER_PORT=5055"
-)
-
-echo [Streamarr] Starting resolver on port %RESOLVER_PORT%...
-pushd "%ROOT%"
-start "Streamarr Resolver" "%VENV_PY%" -m backend.resolver.api
 popd
-
-echo [Streamarr] Resolver launched in a separate window. Close that window or use taskkill to stop it.
-exit /b 0
+if not "%exitCode%"=="0" (
+    echo Resolver exited with code %exitCode%.
+    pause
+)
+exit /b %exitCode%
