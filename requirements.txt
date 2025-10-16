@@ -11,4 +11,5 @@ typer>=0.9.0
 redis>=5.0.0
 rq>=1.15.1
 fakeredis>=2.23.0
+platformdirs>=4.0.0
 ruff>=0.6.9

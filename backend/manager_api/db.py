@@ -11,6 +11,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from .models import ConfigRecord
 from .schemas import ConfigModel
 from .settings import ManagerSettings
+from .utils.paths import ensure_strm_directory
 
 
 def _ensure_sqlite_path(database_url: str) -> None:
@@ -38,10 +39,11 @@ def init_database(engine: Engine, settings: ManagerSettings) -> None:
     with Session(engine) as session:
         record = session.get(ConfigRecord, 1)
         if record is None:
+            default_strm_path = ensure_strm_directory(settings.default_strm_output_path)
             defaults = ConfigRecord(
                 id=1,
                 resolver_url=settings.default_resolver_url,
-                strm_output_path=settings.default_strm_output_path,
+                strm_output_path=default_strm_path,
                 tmdb_api_key=settings.default_tmdb_api_key,
                 html_title_fetch=settings.default_html_title_fetch,
             )

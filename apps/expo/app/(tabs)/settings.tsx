@@ -17,7 +17,7 @@ import type { ConfigModel } from "@/types/api";
 export default function SettingsScreen() {
   const { session, updateSession, signOut } = useAuth();
   const [resolverUrl, setResolverUrl] = useState("http://localhost:5055");
-  const [strmPath, setStrmPath] = useState("/srv/streamarr/strm");
+  const [strmPath, setStrmPath] = useState("");
   const [tmdbKey, setTmdbKey] = useState("");
   const [htmlTitleFetch, setHtmlTitleFetch] = useState(true);
   const [savingError, setSavingError] = useState<string | null>(null);
@@ -100,8 +100,12 @@ export default function SettingsScreen() {
           onChangeText={setStrmPath}
           autoCapitalize="none"
           autoCorrect={false}
+          placeholder="Varsayılan klasörü gösteriliyor"
           style={styles.input}
         />
+        <Text style={styles.helperText}>
+          Alanı boş bırakırsanız yöneticinin varsayılan klasörüne dönülür.
+        </Text>
 
         <Text style={[styles.label, styles.sectionSpacing]}>TMDB API Anahtarı</Text>
         <TextInput

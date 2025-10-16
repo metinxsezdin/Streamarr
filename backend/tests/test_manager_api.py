@@ -35,9 +35,11 @@ def client(tmp_path: Path) -> TestClient:
     """Provide a test client backed by an isolated SQLite database."""
 
     db_path = tmp_path / "manager.db"
+    default_strm = tmp_path / "strm"
     settings = ManagerSettings(
         database_url=f"sqlite:///{db_path}",
         redis_url="fakeredis://",
+        default_strm_output_path=str(default_strm),
     )
     app = create_app(settings=settings)
     return TestClient(app)
@@ -104,12 +106,11 @@ def test_config_update_allows_clearing_tmdb_api_key(client: TestClient) -> None:
     assert persisted.tmdb_api_key is None
 
 
-def test_setup_endpoint_persists_configuration(client: TestClient) -> None:
-    """POST /setup should overwrite the stored configuration."""
+def test_setup_endpoint_persists_configuration_with_default_path(client: TestClient) -> None:
+    """POST /setup without a STRM path should fall back to the default."""
 
     payload = {
         "resolver_url": "http://resolver:5055",
-        "strm_output_path": "/data/strm",
         "tmdb_api_key": "abc123",
         "html_title_fetch": False,
     }
@@ -120,12 +121,31 @@ def test_setup_endpoint_persists_configuration(client: TestClient) -> None:
     body = response.json()
     assert body["job"] is None
     config = ConfigModel.model_validate(body["config"])
-    for key, value in payload.items():
-        assert getattr(config, key) == value
+    expected_path = str((Path(client.app.state.app_state.settings.default_strm_output_path)).resolve())
+    assert config.strm_output_path == expected_path
+    assert config.resolver_url == payload["resolver_url"]
+    assert config.tmdb_api_key == payload["tmdb_api_key"]
+    assert config.html_title_fetch is False
 
     persisted = ConfigModel.model_validate(client.get("/config").json())
-    for key, value in payload.items():
-        assert getattr(persisted, key) == value
+    assert persisted.strm_output_path == expected_path
+
+
+def test_setup_endpoint_accepts_custom_strm_output_path(client: TestClient) -> None:
+    """POST /setup should allow overriding the STRM directory."""
+
+    payload = {
+        "resolver_url": "http://resolver:5055",
+        "strm_output_path": "./relative/strm",
+        "html_title_fetch": True,
+    }
+
+    response = client.post("/setup", json=payload)
+    assert response.status_code == 200
+
+    config = ConfigModel.model_validate(response.json()["config"])
+    expected = str((Path("./relative/strm")).expanduser().resolve())
+    assert config.strm_output_path == expected
 
 
 def test_setup_endpoint_can_trigger_bootstrap_job(client: TestClient) -> None:

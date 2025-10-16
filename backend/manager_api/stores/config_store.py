@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 from ..db import read_config
 from ..models import ConfigRecord
 from ..schemas import ConfigModel, ConfigUpdate
+from ..utils.paths import ensure_strm_directory
 
 
 class ConfigStore:
@@ -33,7 +34,7 @@ class ConfigStore:
             if record is None:
                 raise RuntimeError("Configuration record missing from database")
             record.resolver_url = payload.resolver_url
-            record.strm_output_path = payload.strm_output_path
+            record.strm_output_path = ensure_strm_directory(payload.strm_output_path)
             record.tmdb_api_key = payload.tmdb_api_key
             record.html_title_fetch = payload.html_title_fetch
             record.updated_at = datetime.utcnow()

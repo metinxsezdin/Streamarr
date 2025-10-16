@@ -4,6 +4,7 @@ from sqlmodel import Session
 
 from .services import JobQueueService, ResolverService
 from .state import AppState
+from .settings import ManagerSettings
 from .stores.config_store import ConfigStore
 from .stores.job_log_store import JobLogStore
 from .stores.job_store import JobStore
@@ -47,6 +48,12 @@ def get_job_queue(app_state: AppState = Depends(get_app_state)) -> JobQueueServi
     """Return the job queue integration service."""
 
     return app_state.job_queue
+
+
+def get_settings(app_state: AppState = Depends(get_app_state)) -> ManagerSettings:
+    """Expose the application settings dependency."""
+
+    return app_state.settings
 
 
 def get_session(app_state: AppState = Depends(get_app_state)):

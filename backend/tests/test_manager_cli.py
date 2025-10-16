@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -81,15 +82,21 @@ def cli_client(tmp_path: Path) -> TestClient:
     """Provide a TestClient and patch the CLI HTTP client factory."""
 
     db_path = tmp_path / "manager.db"
+    default_strm = tmp_path / "cli-strm"
     settings = ManagerSettings(
         database_url=f"sqlite:///{db_path}",
         redis_url="fakeredis://",
+        default_strm_output_path=str(default_strm),
     )
     app = create_app(settings=settings)
     test_client = TestClient(app)
 
     original_factory = client_module.create_client
     original_app_factory = cli_app_module.create_client
+
+    env_var = "STREAMARR_MANAGER_DEFAULT_STRM_OUTPUT_PATH"
+    previous = os.environ.get(env_var)
+    os.environ[env_var] = str(default_strm)
 
     def _factory(base_url: str, *, timeout: float = 10.0, transport: Any = None):  # type: ignore[override]
         return test_client
@@ -101,6 +108,10 @@ def cli_client(tmp_path: Path) -> TestClient:
 
     client_module.create_client = original_factory  # type: ignore[assignment]
     cli_app_module.create_client = original_app_factory  # type: ignore[assignment]
+    if previous is None:
+        del os.environ[env_var]
+    else:
+        os.environ[env_var] = previous
 
 
 def drain_jobs(client: TestClient) -> None:
@@ -168,8 +179,6 @@ def test_cli_setup_persists_configuration(runner: CliRunner, cli_client: TestCli
             "setup",
             "--resolver-url",
             "http://resolver:5055",
-            "--strm-output-path",
-            "/data/strm",
             "--tmdb-api-key",
             "seed-token",
             "--no-html-title-fetch",
@@ -181,10 +190,15 @@ def test_cli_setup_persists_configuration(runner: CliRunner, cli_client: TestCli
     assert payload["config"]["resolver_url"] == "http://resolver:5055"
     assert payload["config"]["html_title_fetch"] is False
     assert payload["job"] is None
+    expected_path = str(
+        Path(cli_client.app.state.app_state.settings.default_strm_output_path).resolve()
+    )
+    assert payload["config"]["strm_output_path"] == expected_path
 
     persisted = cli_client.get("/config").json()
     assert persisted["resolver_url"] == "http://resolver:5055"
     assert persisted["tmdb_api_key"] == "seed-token"
+    assert persisted["strm_output_path"] == expected_path
 
 
 def test_cli_setup_can_trigger_initial_job(
@@ -212,6 +226,8 @@ def test_cli_setup_can_trigger_initial_job(
     payload = json.loads(result.output)
     assert payload["job"]["type"] == "bootstrap"
     assert payload["job"]["status"] == "queued"
+    expected = str(Path("/data/strm").expanduser().resolve())
+    assert payload["config"]["strm_output_path"] == expected
 
     drain_jobs(cli_client)
     final = cli_client.get(f"/jobs/{payload['job']['id']}").json()
@@ -240,7 +256,9 @@ def test_cli_config_update_modifies_store(runner: CliRunner, cli_client: TestCli
 
     persisted = cli_client.get("/config").json()
     assert persisted["html_title_fetch"] is False
-    assert persisted["strm_output_path"] == "/data/strm"
+    assert persisted["strm_output_path"] == str(
+        Path("/data/strm").expanduser().resolve()
+    )
 
 
 def test_cli_config_update_can_clear_tmdb_api_key(

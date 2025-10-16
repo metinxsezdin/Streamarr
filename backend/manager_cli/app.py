@@ -49,7 +49,12 @@ def health(api_base: str = _api_base_option()) -> None:
 @app.command()
 def setup(
     resolver_url: str = typer.Option(..., help="Resolver service base URL."),
-    strm_output_path: str = typer.Option(..., help="Default STRM export directory."),
+    strm_output_path: Optional[str] = typer.Option(
+        None,
+        "--strm-output-path",
+        help="Default STRM export directory. Varsayılan platform dizini kullanılabilir.",
+        show_default=False,
+    ),
     tmdb_api_key: Optional[str] = typer.Option(None, help="TMDB API key to persist."),
     html_title_fetch: bool = typer.Option(
         True,
@@ -76,9 +81,17 @@ def setup(
 ) -> None:
     """Persist initial configuration and optionally trigger a bootstrap job."""
 
+    default_strm_path = strm_output_path.strip() if strm_output_path else None
+    if default_strm_path:
+        effective_strm_path = default_strm_path
+    else:
+        from backend.manager_api.settings import ManagerSettings
+
+        effective_strm_path = ManagerSettings().default_strm_output_path
+
     payload: dict[str, object] = {
-        "resolver_url": resolver_url,
-        "strm_output_path": strm_output_path,
+        "resolver_url": resolver_url.strip(),
+        "strm_output_path": effective_strm_path,
         "html_title_fetch": html_title_fetch,
         "run_initial_job": run_initial_job,
         "initial_job_type": initial_job_type,
@@ -139,7 +152,7 @@ def update_config(
     if resolver_url is not None:
         payload["resolver_url"] = resolver_url
     if strm_output_path is not None:
-        payload["strm_output_path"] = strm_output_path
+        payload["strm_output_path"] = strm_output_path.strip()
     if clear_tmdb_api_key:
         payload["tmdb_api_key"] = None
     elif tmdb_api_key is not None:
