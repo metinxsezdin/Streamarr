@@ -8,7 +8,7 @@ from sqlmodel import Session
 
 from .db import create_engine_from_settings, init_database
 from .settings import ManagerSettings
-from .services import ResolverService
+from .services import JobQueueService, ResolverService
 from .stores.config_store import ConfigStore
 from .stores.job_log_store import JobLogStore
 from .stores.job_store import JobStore
@@ -25,6 +25,7 @@ class AppState:
     job_log_store: JobLogStore
     library_store: LibraryStore
     resolver_service: ResolverService
+    job_queue: JobQueueService
     engine: Engine
 
     def __init__(self, settings: ManagerSettings) -> None:
@@ -36,6 +37,7 @@ class AppState:
         self.job_log_store = JobLogStore(self.engine)
         self.library_store = LibraryStore(self.engine)
         self.resolver_service = ResolverService()
+        self.job_queue = JobQueueService(settings)
 
     def session(self) -> Session:
         """Instantiate a SQLModel session for dependencies."""

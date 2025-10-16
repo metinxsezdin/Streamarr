@@ -31,7 +31,7 @@ paths:
               $ref: '#/components/schemas/SetupRequest'
       responses:
         '200':
-          description: Setup completed and optional bootstrap job triggered.
+          description: Setup completed and optional bootstrap job enqueued.
           content:
             application/json:
               schema:
@@ -117,7 +117,7 @@ paths:
               $ref: '#/components/schemas/JobRunRequest'
       responses:
         '201':
-          description: Job enqueued and completed.
+          description: Job enqueued for asynchronous processing.
           content:
             application/json:
               schema:
@@ -401,9 +401,26 @@ components:
         version:
           type: string
           example: 0.1.0
+        queue:
+          $ref: '#/components/schemas/QueueHealthStatus'
       required:
         - status
         - version
+        - queue
+    QueueHealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - error
+          example: ok
+        detail:
+          type: string
+          nullable: true
+      required:
+        - status
     Config:
       type: object
       properties:

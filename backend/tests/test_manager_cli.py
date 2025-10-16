@@ -10,6 +10,7 @@ import importlib
 
 import pytest
 from fastapi.testclient import TestClient
+from rq.worker import SimpleWorker
 from typer.testing import CliRunner
 from sqlmodel import Session
 
@@ -80,7 +81,10 @@ def cli_client(tmp_path: Path) -> TestClient:
     """Provide a TestClient and patch the CLI HTTP client factory."""
 
     db_path = tmp_path / "manager.db"
-    settings = ManagerSettings(database_url=f"sqlite:///{db_path}")
+    settings = ManagerSettings(
+        database_url=f"sqlite:///{db_path}",
+        redis_url="fakeredis://",
+    )
     app = create_app(settings=settings)
     test_client = TestClient(app)
 
@@ -97,6 +101,14 @@ def cli_client(tmp_path: Path) -> TestClient:
 
     client_module.create_client = original_factory  # type: ignore[assignment]
     cli_app_module.create_client = original_app_factory  # type: ignore[assignment]
+
+
+def drain_jobs(client: TestClient) -> None:
+    """Process queued jobs for CLI-oriented tests."""
+
+    app_state = client.app.state.app_state
+    worker = SimpleWorker([app_state.job_queue.queue], connection=app_state.job_queue.connection)
+    worker.work(burst=True)
 
 
 def _seed_library(cli_client: TestClient) -> None:
@@ -199,7 +211,11 @@ def test_cli_setup_can_trigger_initial_job(
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert payload["job"]["type"] == "bootstrap"
-    assert payload["job"]["status"] == "completed"
+    assert payload["job"]["status"] == "queued"
+
+    drain_jobs(cli_client)
+    final = cli_client.get(f"/jobs/{payload['job']['id']}").json()
+    assert final["status"] == "completed"
     assert payload["job"]["payload"] == {"collect": True}
 
 def test_cli_config_update_modifies_store(runner: CliRunner, cli_client: TestClient) -> None:
@@ -253,8 +269,8 @@ def test_cli_config_update_can_clear_tmdb_api_key(
     assert cli_client.get("/config").json()["tmdb_api_key"] is None
 
 
-def test_cli_jobs_run_creates_completed_job(runner: CliRunner, cli_client: TestClient) -> None:
-    """jobs run command should trigger a completed job."""
+def test_cli_jobs_run_enqueues_job_and_reports_completion(runner: CliRunner, cli_client: TestClient) -> None:
+    """jobs run command should enqueue a job and report completion after worker processing."""
 
     result = runner.invoke(
         cli_app,
@@ -263,11 +279,17 @@ def test_cli_jobs_run_creates_completed_job(runner: CliRunner, cli_client: TestC
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
-    assert payload["status"] == "completed"
+    assert payload["status"] == "queued"
     assert payload["payload"] == {"refresh": True}
-    assert payload["worker_id"] == "manager-api"
-    assert payload["duration_seconds"] >= 0
+    assert payload["worker_id"] is None
+    assert payload["duration_seconds"] is None
     assert "created_at" in payload
+
+    drain_jobs(cli_client)
+    final = cli_client.get(f"/jobs/{payload['id']}").json()
+    assert final["status"] == "completed"
+    assert final["worker_id"]
+    assert final["duration_seconds"] >= 0
 
     jobs = cli_client.get("/jobs").json()
     assert any(job["type"] == "collect" for job in jobs)
@@ -277,6 +299,7 @@ def test_cli_jobs_list_outputs_recent_jobs(runner: CliRunner, cli_client: TestCl
     """jobs list command should display stored jobs."""
 
     cli_client.post("/jobs/run", json={"type": "catalog"})
+    drain_jobs(cli_client)
 
     result = runner.invoke(cli_app, ["jobs", "list", "--limit", "5"])
 
@@ -289,6 +312,7 @@ def test_cli_jobs_list_supports_filters(runner: CliRunner, cli_client: TestClien
 
     cli_client.post("/jobs/run", json={"type": "collect"})
     cli_client.post("/jobs/run", json={"type": "catalog"})
+    drain_jobs(cli_client)
 
     result = runner.invoke(
         cli_app,
@@ -316,13 +340,15 @@ def test_cli_jobs_show_displays_single_job(runner: CliRunner, cli_client: TestCl
     )
     job_id = response.json()["id"]
 
+    drain_jobs(cli_client)
+
     result = runner.invoke(cli_app, ["jobs", "show", job_id])
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert payload["id"] == job_id
     assert payload["payload"] == {"full": True}
-    assert payload["worker_id"] == "manager-api"
+    assert payload["worker_id"]
     assert payload["duration_seconds"] >= 0
 
 

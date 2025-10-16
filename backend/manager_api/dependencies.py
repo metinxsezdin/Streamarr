@@ -2,7 +2,7 @@
 from fastapi import Depends, Request
 from sqlmodel import Session
 
-from .services import ResolverService
+from .services import JobQueueService, ResolverService
 from .state import AppState
 from .stores.config_store import ConfigStore
 from .stores.job_log_store import JobLogStore
@@ -41,6 +41,12 @@ def get_resolver_service(app_state: AppState = Depends(get_app_state)) -> Resolv
     """Expose the resolver service helper for request handlers."""
 
     return app_state.resolver_service
+
+
+def get_job_queue(app_state: AppState = Depends(get_app_state)) -> JobQueueService:
+    """Return the job queue integration service."""
+
+    return app_state.job_queue
 
 
 def get_session(app_state: AppState = Depends(get_app_state)):

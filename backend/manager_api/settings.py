@@ -27,6 +27,18 @@ class ManagerSettings(BaseSettings):
     database_echo: bool = Field(
         default=False, description="Enable SQL echo for debugging queries."
     )
+    redis_url: str = Field(
+        default="redis://localhost:6379/0",
+        description="Connection URL for the Redis-backed job queue.",
+    )
+    redis_queue_name: str = Field(
+        default="streamarr-manager",
+        description="RQ queue name used for manager jobs.",
+    )
+    queue_worker_name: str = Field(
+        default="manager-worker",
+        description="Identifier used when reporting job worker executions.",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="STREAMARR_MANAGER_",

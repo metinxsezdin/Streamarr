@@ -4,9 +4,9 @@ from __future__ import annotations
 import sys
 from datetime import datetime
 from pathlib import Path
-
 import pytest
 from fastapi.testclient import TestClient
+from rq.worker import SimpleWorker
 from sqlmodel import Session
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -34,9 +34,20 @@ def client(tmp_path: Path) -> TestClient:
     """Provide a test client backed by an isolated SQLite database."""
 
     db_path = tmp_path / "manager.db"
-    settings = ManagerSettings(database_url=f"sqlite:///{db_path}")
+    settings = ManagerSettings(
+        database_url=f"sqlite:///{db_path}",
+        redis_url="fakeredis://",
+    )
     app = create_app(settings=settings)
     return TestClient(app)
+
+
+def drain_jobs(client: TestClient) -> None:
+    """Drain queued jobs using an in-process RQ worker."""
+
+    app_state = client.app.state.app_state
+    worker = SimpleWorker([app_state.job_queue.queue], connection=app_state.job_queue.connection)
+    worker.work(burst=True)
 
 
 def test_health_endpoint_reports_ok_status(client: TestClient) -> None:
@@ -45,7 +56,11 @@ def test_health_endpoint_reports_ok_status(client: TestClient) -> None:
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "version": "0.1.0"}
+    assert response.json() == {
+        "status": "ok",
+        "version": "0.1.0",
+        "queue": {"status": "ok", "detail": None},
+    }
 
 
 def test_config_round_trip_updates_database_store(client: TestClient) -> None:
@@ -133,10 +148,16 @@ def test_setup_endpoint_can_trigger_bootstrap_job(client: TestClient) -> None:
     job = JobModel.model_validate(body["job"])
     assert job.type == "bootstrap"
     assert job.payload == {"collect": True}
-    assert job.status == "completed"
+    assert job.status == "queued"
 
-def test_jobs_run_endpoint_creates_completed_job(client: TestClient) -> None:
-    """POST /jobs/run should enqueue and complete a job synchronously."""
+    drain_jobs(client)
+    final_response = client.get(f"/jobs/{job.id}")
+    assert final_response.status_code == 200
+    final_job = JobModel.model_validate(final_response.json())
+    assert final_job.status == "completed"
+
+def test_jobs_run_endpoint_tracks_job_completion(client: TestClient) -> None:
+    """POST /jobs/run should enqueue a job and mark it completed after worker processing."""
 
     response = client.post(
         "/jobs/run",
@@ -145,27 +166,35 @@ def test_jobs_run_endpoint_creates_completed_job(client: TestClient) -> None:
 
     assert response.status_code == 201
     job = JobModel.model_validate(response.json())
-    assert job.status == "completed"
-    assert job.progress == 1.0
-    assert job.worker_id == "manager-api"
+    assert job.status == "queued"
+    assert job.progress == 0.0
+    assert job.worker_id is None
     assert job.payload == {"full": True}
     assert job.created_at <= job.updated_at
-    assert job.started_at is not None
-    assert job.finished_at is not None
-    assert job.duration_seconds is not None
-    assert job.duration_seconds >= 0
+    assert job.started_at is None
+    assert job.finished_at is None
+    assert job.duration_seconds is None
+
+    drain_jobs(client)
+    detail_response = client.get(f"/jobs/{job.id}")
+    assert detail_response.status_code == 200
+    completed = JobModel.model_validate(detail_response.json())
+    assert completed.status == "completed"
+    assert completed.progress == 1.0
+    assert completed.worker_id is not None
+    assert completed.worker_id != ""
+    assert completed.payload == {"full": True}
+    assert completed.created_at <= completed.updated_at
+    assert completed.started_at is not None
+    assert completed.finished_at is not None
+    assert completed.duration_seconds is not None
+    assert completed.duration_seconds >= 0
 
     list_response = client.get("/jobs", params={"limit": 5})
     assert list_response.status_code == 200
     jobs = [JobModel.model_validate(item) for item in list_response.json()]
     assert any(item.id == job.id for item in jobs)
 
-    detail_response = client.get(f"/jobs/{job.id}")
-    assert detail_response.status_code == 200
-    detail = JobModel.model_validate(detail_response.json())
-    assert detail.id == job.id
-    assert detail.payload == job.payload
-    assert detail.created_at <= detail.updated_at
 
 
 def test_jobs_run_persists_log_entries(client: TestClient) -> None:
@@ -174,14 +203,16 @@ def test_jobs_run_persists_log_entries(client: TestClient) -> None:
     response = client.post("/jobs/run", json={"type": "collect"})
     job = JobModel.model_validate(response.json())
 
+    drain_jobs(client)
     logs_response = client.get(f"/jobs/{job.id}/logs")
     assert logs_response.status_code == 200
     payload = [JobLogModel.model_validate(item) for item in logs_response.json()]
-    assert len(payload) == 3
+    assert len(payload) == 4
     messages = [entry.message for entry in payload]
     assert messages == [
         "Job collect enqueued",
         "Job started",
+        "Executing collect job",
         "Job completed",
     ]
 

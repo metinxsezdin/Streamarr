@@ -3,9 +3,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
-from ..dependencies import get_job_log_store, get_job_store
+from ..dependencies import get_job_log_store, get_job_queue, get_job_store
 from ..schemas import JobCancelRequest, JobLogCreate, JobLogModel, JobModel, JobRunRequest
-from ..services.job_runner import run_sync_job
+from ..services.queue import JobQueueError, JobQueueService
 from ..stores.job_log_store import JobLogStore
 from ..stores.job_store import JobStore
 
@@ -17,10 +17,14 @@ def run_job(
     request: JobRunRequest,
     store: JobStore = Depends(get_job_store),
     log_store: JobLogStore = Depends(get_job_log_store),
+    queue: JobQueueService = Depends(get_job_queue),
 ) -> JobModel:
-    """Enqueue a job and synchronously mark it as completed."""
+    """Enqueue a job for asynchronous execution via the Redis queue."""
 
-    return run_sync_job(store, log_store, request.type, request.payload)
+    try:
+        return queue.enqueue(store, log_store, request.type, request.payload)
+    except JobQueueError as exc:  # pragma: no cover - queue failures
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("", response_model=list[JobModel])

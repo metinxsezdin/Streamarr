@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import List, Literal, Optional
 
 import typer
@@ -164,6 +165,18 @@ def run_job(
         "--payload",
         help="Optional JSON payload passed to the job runner.",
     ),
+    wait: bool = typer.Option(
+        False,
+        "--wait/--no-wait",
+        help="Block until the job finishes by polling the API.",
+        show_default=True,
+    ),
+    wait_timeout: float = typer.Option(
+        30.0,
+        "--wait-timeout",
+        help="Maximum seconds to wait when --wait is enabled.",
+        show_default=True,
+    ),
     api_base: str = _api_base_option(),
 ) -> None:
     """Trigger a job execution via the Manager API."""
@@ -179,7 +192,45 @@ def run_job(
     with create_client(api_base) as client:
         response = client.post("/jobs/run", json=request_body)
         response.raise_for_status()
-        typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
+        payload = response.json()
+
+        if wait:
+            payload = _wait_for_job_completion(
+                client,
+                payload["id"],
+                timeout=wait_timeout,
+            )
+
+        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+
+
+def _wait_for_job_completion(client, job_id: str, *, timeout: float) -> dict[str, object]:
+    """Poll the Manager API until the job reaches a terminal state."""
+
+    terminal_statuses = {"completed", "failed", "cancelled"}
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+        response = client.get(f"/jobs/{job_id}")
+        response.raise_for_status()
+        payload = response.json()
+        if payload["status"] in terminal_statuses:
+            return payload
+        time.sleep(0.25)
+
+    typer.echo(
+        json.dumps(
+            {
+                "id": job_id,
+                "status": "timeout",
+                "detail": "Job did not complete before wait timeout.",
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        err=True,
+    )
+    raise typer.Exit(code=1)
 
 
 @jobs_app.command("list")

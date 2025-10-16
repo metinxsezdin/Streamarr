@@ -7,11 +7,24 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class QueueHealthStatus(BaseModel):
+    """Represents Redis queue connectivity status."""
+
+    status: Literal["ok", "error"] = Field(default="ok")
+    detail: str | None = Field(
+        default=None, description="Optional diagnostic message when the queue is unavailable."
+    )
+
+
 class HealthStatus(BaseModel):
     """Service health payload."""
 
     status: Literal["ok"] = Field(default="ok")
     version: str = Field(default="0.1.0", description="Semantic version of the API service.")
+    queue: QueueHealthStatus = Field(
+        default_factory=QueueHealthStatus,
+        description="Health information for the background job queue.",
+    )
 
 
 class ResolverProcessStatusModel(BaseModel):
