@@ -50,6 +50,13 @@ job status/log records in SQLite.
 * Job logs contain an additional entry (`Executing <job_type> job`) emitted by
   the worker during processing.
 
+## Observability
+
+* The Manager API exposes `/jobs/metrics` to report aggregated job counts,
+  average durations, and the current Redis queue depth. Use this endpoint (or
+  the `streamarr-manager jobs metrics` CLI command) to confirm workers are
+  draining the queue after migration.
+
 ## Troubleshooting
 
 * If `/health` reports `queue_unreachable`, verify that Redis is running and the

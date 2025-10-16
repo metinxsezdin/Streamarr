@@ -273,6 +273,18 @@ def list_jobs(
         typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
 
 
+@jobs_app.command("metrics")
+def jobs_metrics(
+    api_base: str = _api_base_option(),
+) -> None:
+    """Display aggregated job metrics reported by the API."""
+
+    with create_client(api_base) as client:
+        response = client.get("/jobs/metrics")
+        response.raise_for_status()
+        typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
+
+
 @jobs_app.command("show")
 def show_job(
     job_id: str = typer.Argument(..., help="Identifier of the job to display."),

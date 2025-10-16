@@ -105,6 +105,17 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Job'
+  /jobs/metrics:
+    get:
+      summary: Job metrics
+      operationId: getJobMetrics
+      responses:
+        '200':
+          description: Aggregate job and queue metrics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobMetrics'
   /jobs/run:
     post:
       summary: Enqueue job
@@ -535,6 +546,34 @@ components:
         - progress
         - created_at
         - updated_at
+    JobMetrics:
+      type: object
+      properties:
+        total:
+          type: integer
+        status_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        type_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        average_duration_seconds:
+          type: number
+          format: float
+          nullable: true
+        last_finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        queue_depth:
+          type: integer
+      required:
+        - total
+        - status_counts
+        - type_counts
+        - queue_depth
     JobRunRequest:
       type: object
       properties:

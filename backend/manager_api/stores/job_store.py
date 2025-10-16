@@ -6,10 +6,11 @@ from threading import Lock
 from typing import Any, Iterable
 from uuid import uuid4
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ..models import JobRecord
-from ..schemas import JobModel
+from ..schemas import JobMetricsModel, JobModel
 
 
 class JobStore:
@@ -154,6 +155,57 @@ class JobStore:
             session.commit()
             session.refresh(record)
             return _to_model(record)
+
+    def metrics(self) -> JobMetricsModel:
+        """Compute aggregate statistics for persisted jobs."""
+
+        with Session(self._engine) as session:
+            total = session.exec(
+                select(func.count()).select_from(JobRecord)
+            ).one()
+
+            status_rows = session.exec(
+                select(JobRecord.status, func.count())
+                .group_by(JobRecord.status)
+                .order_by(JobRecord.status)
+            ).all()
+            status_counts = {status: count for status, count in status_rows}
+
+            type_rows = session.exec(
+                select(JobRecord.type, func.count())
+                .group_by(JobRecord.type)
+                .order_by(JobRecord.type)
+            ).all()
+            type_counts = {job_type: count for job_type, count in type_rows}
+
+            duration_rows = session.exec(
+                select(JobRecord.started_at, JobRecord.finished_at)
+                .where(JobRecord.started_at.is_not(None))
+                .where(JobRecord.finished_at.is_not(None))
+            ).all()
+            durations = [
+                (finished - started).total_seconds()
+                for started, finished in duration_rows
+                if started and finished
+            ]
+            average_duration = (
+                sum(durations) / len(durations) if durations else None
+            )
+
+            last_finished = session.exec(
+                select(JobRecord.finished_at)
+                .where(JobRecord.finished_at.is_not(None))
+                .order_by(JobRecord.finished_at.desc())
+                .limit(1)
+            ).one_or_none()
+
+        return JobMetricsModel(
+            total=total,
+            status_counts=status_counts,
+            type_counts=type_counts,
+            average_duration_seconds=average_duration,
+            last_finished_at=last_finished,
+        )
 
 
 def _to_model(record: JobRecord) -> JobModel:

@@ -331,6 +331,28 @@ def test_cli_jobs_list_supports_filters(runner: CliRunner, cli_client: TestClien
     assert "\"type\": \"catalog\"" not in result.output
 
 
+def test_cli_jobs_metrics_reports_queue_depth(runner: CliRunner, cli_client: TestClient) -> None:
+    """jobs metrics command should surface queue depth and aggregates."""
+
+    cli_client.post("/jobs/run", json={"type": "collect"})
+
+    queued_result = runner.invoke(cli_app, ["jobs", "metrics"])
+    assert queued_result.exit_code == 0
+    queued_payload = json.loads(queued_result.output)
+    assert queued_payload["queue_depth"] == 1
+    assert queued_payload["status_counts"]["queued"] >= 1
+
+    drain_jobs(cli_client)
+
+    completed_result = runner.invoke(cli_app, ["jobs", "metrics"])
+    assert completed_result.exit_code == 0
+    completed_payload = json.loads(completed_result.output)
+    assert completed_payload["queue_depth"] == 0
+    assert completed_payload["status_counts"]["completed"] >= 1
+    assert completed_payload["average_duration_seconds"] is not None
+    assert completed_payload["last_finished_at"] is not None
+
+
 def test_cli_jobs_show_displays_single_job(runner: CliRunner, cli_client: TestClient) -> None:
     """jobs show should fetch job details from the API."""
 

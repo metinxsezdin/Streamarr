@@ -18,6 +18,7 @@ from backend.manager_api.models import LibraryItemRecord  # noqa: E402
 from backend.manager_api.schemas import (  # noqa: E402
     ConfigModel,
     JobLogModel,
+    JobMetricsModel,
     JobModel,
 )
 from backend.manager_api.services import (  # noqa: E402
@@ -263,6 +264,33 @@ def test_jobs_list_supports_status_and_type_filters(client: TestClient) -> None:
     assert {job.type for job in type_payload} == {"collect"}
     assert any(job.id == failed.id for job in type_payload)
     assert all(job.id != queued.id for job in type_payload)
+
+
+def test_jobs_metrics_reports_queue_depth_and_durations(client: TestClient) -> None:
+    """GET /jobs/metrics should include queue depth and aggregate timings."""
+
+    response = client.post("/jobs/run", json={"type": "collect"})
+    assert response.status_code == 201
+
+    queued_metrics = client.get("/jobs/metrics")
+    assert queued_metrics.status_code == 200
+    queued_snapshot = JobMetricsModel.model_validate(queued_metrics.json())
+    assert queued_snapshot.queue_depth == 1
+    assert queued_snapshot.status_counts.get("queued", 0) >= 1
+    assert queued_snapshot.type_counts.get("collect", 0) >= 1
+    assert queued_snapshot.average_duration_seconds is None
+    assert queued_snapshot.last_finished_at is None
+
+    drain_jobs(client)
+
+    completed_metrics = client.get("/jobs/metrics")
+    assert completed_metrics.status_code == 200
+    completed_snapshot = JobMetricsModel.model_validate(completed_metrics.json())
+    assert completed_snapshot.queue_depth == 0
+    assert completed_snapshot.status_counts.get("completed", 0) >= 1
+    assert completed_snapshot.type_counts.get("collect", 0) >= 1
+    assert completed_snapshot.average_duration_seconds is not None
+    assert completed_snapshot.last_finished_at is not None
 
 
 def test_jobs_cancel_endpoint_marks_job_cancelled(client: TestClient) -> None:

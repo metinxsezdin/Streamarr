@@ -263,7 +263,7 @@ Create a cross-platform control panel for Streamarr using Expo (React Native) fo
    - ✅ Provision Redis (or preferred broker) locally and in deployment environments, with clear setup docs (`docker-compose` now ships a Redis service).
    - ✅ Migrate job orchestrator to RQ or Dramatiq and validate worker scaling behaviour (see `backend/manager_api/services/queue.py`).
    - ✅ Update docker compose and infrastructure automation to include the queue service.
-   - ✅ Add queue health checks, metrics, and alerting hooks to surface failures early (`/health` now reports queue status).
+   - ✅ Add queue health checks, metrics, and alerting hooks to surface failures early (`/health` and `/jobs/metrics` report queue status and depth).
    - ✅ Document migration steps for existing CLI users and background task backlog (`docs/backend/queue_migration.md`).
 3. **Phase 2**: Expo app foundation
    - Setup project, navigation, auth, basic dashboard.

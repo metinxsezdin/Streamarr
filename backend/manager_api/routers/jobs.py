@@ -4,7 +4,14 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from ..dependencies import get_job_log_store, get_job_queue, get_job_store
-from ..schemas import JobCancelRequest, JobLogCreate, JobLogModel, JobModel, JobRunRequest
+from ..schemas import (
+    JobCancelRequest,
+    JobLogCreate,
+    JobLogModel,
+    JobMetricsModel,
+    JobModel,
+    JobRunRequest,
+)
 from ..services.queue import JobQueueError, JobQueueService
 from ..stores.job_log_store import JobLogStore
 from ..stores.job_store import JobStore
@@ -50,6 +57,18 @@ def list_jobs(
     """Return the most recent jobs up to the requested limit."""
 
     return store.list(limit=limit, statuses=statuses, job_type=job_type)
+
+
+@router.get("/metrics", response_model=JobMetricsModel)
+def job_metrics(
+    store: JobStore = Depends(get_job_store),
+    queue: JobQueueService = Depends(get_job_queue),
+) -> JobMetricsModel:
+    """Return aggregate job telemetry combined with queue depth."""
+
+    metrics = store.metrics()
+    pending = len(queue.queue)
+    return metrics.model_copy(update={"queue_depth": int(pending)})
 
 
 @router.get("/{job_id}", response_model=JobModel)

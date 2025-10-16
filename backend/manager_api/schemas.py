@@ -115,6 +115,32 @@ class JobModel(BaseModel):
     )
 
 
+class JobMetricsModel(BaseModel):
+    """Aggregate statistics for background job processing."""
+
+    total: int = Field(description="Total number of job records persisted in the store.")
+    status_counts: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of jobs grouped by current status.",
+    )
+    type_counts: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of jobs grouped by job type identifier.",
+    )
+    average_duration_seconds: float | None = Field(
+        default=None,
+        description="Average duration in seconds for completed jobs when both start and finish timestamps are recorded.",
+    )
+    last_finished_at: datetime | None = Field(
+        default=None,
+        description="Timestamp of the most recently finished job regardless of outcome.",
+    )
+    queue_depth: int = Field(
+        default=0,
+        description="Number of jobs currently waiting in the Redis queue.",
+    )
+
+
 class JobLogCreate(BaseModel):
     """Payload used to append a new job log entry."""
 
