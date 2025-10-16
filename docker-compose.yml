@@ -11,3 +11,8 @@ services:
       CATALOG_PATH: "/app/data/catalog.json"
     volumes:
       - ./data:/app/data
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]

@@ -1,0 +1,706 @@
+openapi: 3.1.0
+info:
+  title: Streamarr Manager API
+  version: 0.1.0
+  description: |
+    Draft specification for the Streamarr manager backend. Routes and schemas
+    will evolve during Sprint 1 as additional functionality comes online.
+servers:
+  - url: http://localhost:8000
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+  /setup:
+    post:
+      summary: Perform initial configuration
+      operationId: setupManager
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetupRequest'
+      responses:
+        '200':
+          description: Setup completed and optional bootstrap job enqueued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupResponse'
+  /config:
+    get:
+      summary: Read configuration
+      operationId: readConfig
+      responses:
+        '200':
+          description: Current configuration values.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+    put:
+      summary: Update configuration
+      operationId: updateConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigUpdate'
+      responses:
+        '200':
+          description: Updated configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+  /jobs:
+    get:
+      summary: List jobs
+      operationId: listJobs
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Number of recent jobs to return.
+        - in: query
+          name: status
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - queued
+                - running
+                - completed
+                - failed
+                - cancelled
+          style: form
+          explode: true
+          description: Filter results to one or more job statuses.
+        - in: query
+          name: type
+          schema:
+            type: string
+          description: Filter results to a specific job type.
+      responses:
+        '200':
+          description: Recent job list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Job'
+  /jobs/metrics:
+    get:
+      summary: Job metrics
+      operationId: getJobMetrics
+      responses:
+        '200':
+          description: Aggregate job and queue metrics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobMetrics'
+  /jobs/run:
+    post:
+      summary: Enqueue job
+      operationId: runJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobRunRequest'
+      responses:
+        '201':
+          description: Job enqueued for asynchronous processing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+  /jobs/{jobId}:
+    get:
+      summary: Fetch job detail
+      operationId: getJob
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+  /jobs/{jobId}/cancel:
+    post:
+      summary: Cancel job
+      operationId: cancelJob
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCancelRequest'
+      responses:
+        '200':
+          description: Job cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          description: Job not found.
+  /jobs/{jobId}/logs:
+    get:
+      summary: List job logs
+      operationId: listJobLogs
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+          description: Maximum number of log events to return.
+      responses:
+        '200':
+          description: Job log entries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JobLog'
+        '404':
+          description: Job not found.
+    post:
+      summary: Append job log
+      operationId: appendJobLog
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobLogCreate'
+      responses:
+        '201':
+          description: Log entry created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobLog'
+        '404':
+          description: Job not found.
+  /library:
+    get:
+      summary: List library items
+      operationId: listLibrary
+      parameters:
+        - in: query
+          name: query
+          schema:
+            type: string
+          description: Search term.
+        - in: query
+          name: site
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by one or more source sites.
+        - in: query
+          name: item_type
+          schema:
+            type: string
+            enum:
+              - movie
+              - episode
+          description: Filter by item type.
+        - in: query
+          name: year
+          schema:
+            type: integer
+            minimum: 1800
+            maximum: 3000
+          description: Filter by an exact release year.
+        - in: query
+          name: year_min
+          schema:
+            type: integer
+            minimum: 1800
+            maximum: 3000
+          description: Filter by minimum release year.
+        - in: query
+          name: year_max
+          schema:
+            type: integer
+            minimum: 1800
+            maximum: 3000
+          description: Filter by maximum release year.
+        - in: query
+          name: has_tmdb
+          schema:
+            type: boolean
+          description: Filter by presence of TMDB metadata.
+        - in: query
+          name: sort
+          schema:
+            type: string
+            default: updated_desc
+            enum:
+              - updated_desc
+              - updated_asc
+              - title_asc
+              - title_desc
+              - year_desc
+              - year_asc
+          description: Sort ordering applied to the returned items.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number starting at 1.
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            default: 25
+            minimum: 1
+            maximum: 100
+          description: Number of items per page.
+      responses:
+        '200':
+          description: Paginated library results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryList'
+  /library/metrics:
+    get:
+      summary: Retrieve library metrics
+      operationId: libraryMetrics
+      responses:
+        '200':
+          description: Aggregate library statistics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryMetrics'
+  /library/{itemId}:
+    get:
+      summary: Fetch library item detail
+      operationId: getLibraryItem
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Library metadata including stream variants.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryItem'
+        '404':
+          description: Item not found.
+  /resolver/health:
+    get:
+      summary: Resolver status proxy
+      operationId: resolverHealth
+      responses:
+        '200':
+          description: Resolver status payload.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '502':
+          description: Resolver unreachable or responded with an error.
+  /resolver/start:
+    post:
+      summary: Launch managed resolver process
+      operationId: resolverStart
+      responses:
+        '200':
+          description: Resolver process launched.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolverProcessStatus'
+        '409':
+          description: Resolver process already running.
+        '500':
+          description: Failed to launch resolver process.
+  /resolver/stop:
+    post:
+      summary: Stop managed resolver process
+      operationId: resolverStop
+      responses:
+        '200':
+          description: Resolver process stopped.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolverProcessStatus'
+        '409':
+          description: Resolver process not running.
+        '500':
+          description: Failed to stop resolver process.
+  /resolver/status:
+    get:
+      summary: Managed resolver process status
+      operationId: resolverStatus
+      responses:
+        '200':
+          description: Resolver process status payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolverProcessStatus'
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        version:
+          type: string
+          example: 0.1.0
+        queue:
+          $ref: '#/components/schemas/QueueHealthStatus'
+      required:
+        - status
+        - version
+        - queue
+    QueueHealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - error
+          example: ok
+        detail:
+          type: string
+          nullable: true
+      required:
+        - status
+    Config:
+      type: object
+      properties:
+        resolver_url:
+          type: string
+        strm_output_path:
+          type: string
+        tmdb_api_key:
+          type: string
+          nullable: true
+        html_title_fetch:
+          type: boolean
+      required:
+        - resolver_url
+        - strm_output_path
+        - html_title_fetch
+    ResolverProcessStatus:
+      type: object
+      properties:
+        running:
+          type: boolean
+        pid:
+          type: integer
+          nullable: true
+        exit_code:
+          type: integer
+          nullable: true
+      required:
+        - running
+    SetupRequest:
+      allOf:
+        - $ref: '#/components/schemas/Config'
+        - type: object
+          properties:
+            run_initial_job:
+              type: boolean
+              default: false
+            initial_job_type:
+              type: string
+              default: bootstrap
+            initial_job_payload:
+              type: object
+              additionalProperties: true
+              nullable: true
+    SetupResponse:
+      type: object
+      properties:
+        config:
+          $ref: '#/components/schemas/Config'
+        job:
+          $ref: '#/components/schemas/Job'
+          nullable: true
+      required:
+        - config
+    ConfigUpdate:
+      type: object
+      properties:
+        resolver_url:
+          type: string
+        strm_output_path:
+          type: string
+        tmdb_api_key:
+          type: string
+          nullable: true
+        html_title_fetch:
+          type: boolean
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, completed, failed, cancelled]
+        progress:
+          type: number
+          format: float
+        worker_id:
+          type: string
+          nullable: true
+        payload:
+          type: object
+          additionalProperties: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        duration_seconds:
+          type: number
+          format: float
+          nullable: true
+      required:
+        - id
+        - type
+        - status
+        - progress
+        - created_at
+        - updated_at
+    JobMetrics:
+      type: object
+      properties:
+        total:
+          type: integer
+        status_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        type_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        average_duration_seconds:
+          type: number
+          format: float
+          nullable: true
+        last_finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        queue_depth:
+          type: integer
+      required:
+        - total
+        - status_counts
+        - type_counts
+        - queue_depth
+    JobRunRequest:
+      type: object
+      properties:
+        type:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+          nullable: true
+      required:
+        - type
+    JobCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          nullable: true
+    JobLogCreate:
+      type: object
+      properties:
+        level:
+          type: string
+          enum: [debug, info, warning, error]
+          default: info
+        message:
+          type: string
+        context:
+          type: object
+          additionalProperties: true
+          nullable: true
+      required:
+        - message
+    JobLog:
+      allOf:
+        - $ref: '#/components/schemas/JobLogCreate'
+        - type: object
+          properties:
+            id:
+              type: integer
+            job_id:
+              type: string
+            created_at:
+              type: string
+              format: date-time
+          required:
+            - id
+            - job_id
+            - created_at
+    StreamVariant:
+      type: object
+      properties:
+        source:
+          type: string
+        quality:
+          type: string
+        url:
+          type: string
+      required:
+        - source
+        - quality
+        - url
+    LibraryItem:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        item_type:
+          type: string
+          enum: [movie, episode]
+        site:
+          type: string
+        year:
+          type: integer
+          nullable: true
+        tmdb_id:
+          type: string
+          nullable: true
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/StreamVariant'
+      required:
+        - id
+        - title
+        - item_type
+        - site
+        - variants
+    LibraryList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LibraryItem'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - page_size
+    LibraryMetrics:
+      type: object
+      properties:
+        total:
+          type: integer
+        site_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        type_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        tmdb_enriched:
+          type: integer
+        tmdb_missing:
+          type: integer
+      required:
+        - total
+        - site_counts
+        - type_counts
+        - tmdb_enriched
+        - tmdb_missing
