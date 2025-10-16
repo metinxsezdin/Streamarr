@@ -22,15 +22,26 @@ class LibraryStore:
         self,
         *,
         query: str | None,
+        site: str | None,
+        item_type: str | None,
+        has_tmdb: bool | None,
         page: int,
         page_size: int,
     ) -> LibraryListModel:
-        """Return a paginated set of library items matching the optional query."""
+        """Return a paginated set of library items matching the provided filters."""
 
         offset = (page - 1) * page_size
         filters = []
         if query:
             filters.append(func.lower(LibraryItemRecord.title).like(f"%{query.lower()}%"))
+        if site:
+            filters.append(func.lower(LibraryItemRecord.site) == site.lower())
+        if item_type:
+            filters.append(LibraryItemRecord.item_type == item_type)
+        if has_tmdb is True:
+            filters.append(LibraryItemRecord.tmdb_id.is_not(None))
+        elif has_tmdb is False:
+            filters.append(LibraryItemRecord.tmdb_id.is_(None))
 
         count_statement = select(func.count()).select_from(LibraryItemRecord)
         items_statement = select(LibraryItemRecord).order_by(LibraryItemRecord.updated_at.desc())

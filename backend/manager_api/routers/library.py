@@ -11,6 +11,15 @@ router = APIRouter(prefix="/library", tags=["library"])
 @router.get("", response_model=LibraryListModel)
 def list_library_items(
     query: str | None = Query(default=None, description="Optional title search term."),
+    site: str | None = Query(default=None, description="Filter results to a specific source site."),
+    item_type: str | None = Query(
+        default=None,
+        description="Filter results by item type (movie or episode).",
+    ),
+    has_tmdb: bool | None = Query(
+        default=None,
+        description="Filter by presence of TMDB metadata (true for only enriched items, false for missing).",
+    ),
     page: int = Query(default=1, ge=1, description="Page number starting at 1."),
     page_size: int = Query(
         default=25,
@@ -20,9 +29,16 @@ def list_library_items(
     ),
     store: LibraryStore = Depends(get_library_store),
 ) -> LibraryListModel:
-    """Return paginated library items matching the optional query."""
+    """Return paginated library items matching the provided filters."""
 
-    return store.list(query=query, page=page, page_size=page_size)
+    return store.list(
+        query=query,
+        site=site,
+        item_type=item_type,
+        has_tmdb=has_tmdb,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/{item_id}", response_model=LibraryItemModel)

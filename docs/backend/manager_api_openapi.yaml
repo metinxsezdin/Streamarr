@@ -121,33 +121,56 @@ paths:
                 $ref: '#/components/schemas/Job'
         '404':
           description: Job not found.
-  /library:
-    get:
-      summary: List library items
-      operationId: listLibrary
-      parameters:
-        - in: query
-          name: query
-          schema:
-            type: string
-          description: Search term.
-        - in: query
-          name: page
-          schema:
-            type: integer
-            default: 1
-        - in: query
-          name: page_size
-          schema:
-            type: integer
-            default: 25
-      responses:
-        '200':
-          description: Paginated library results.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LibraryList'
+    /library:
+      get:
+        summary: List library items
+        operationId: listLibrary
+        parameters:
+          - in: query
+            name: query
+            schema:
+              type: string
+            description: Search term.
+          - in: query
+            name: site
+            schema:
+              type: string
+            description: Filter by source site.
+          - in: query
+            name: item_type
+            schema:
+              type: string
+              enum:
+                - movie
+                - episode
+            description: Filter by item type.
+          - in: query
+            name: has_tmdb
+            schema:
+              type: boolean
+            description: Filter by presence of TMDB metadata.
+          - in: query
+            name: page
+            schema:
+              type: integer
+              default: 1
+              minimum: 1
+            description: Page number starting at 1.
+          - in: query
+            name: page_size
+            schema:
+              type: integer
+              default: 25
+              minimum: 1
+              maximum: 100
+            description: Number of items per page.
+        responses:
+          '200':
+            description: Paginated library results.
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/LibraryList'
   /library/{itemId}:
     get:
       summary: Fetch library item detail

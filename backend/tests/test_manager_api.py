@@ -171,6 +171,30 @@ def test_library_list_and_detail_round_trip(client: TestClient) -> None:
     assert query_payload["total"] == 1
     assert query_payload["items"][0]["id"] == "episode-1"
 
+    site_response = client.get("/library", params={"site": "dizipal"})
+    assert site_response.status_code == 200
+    site_payload = site_response.json()
+    assert site_payload["total"] == 1
+    assert site_payload["items"][0]["id"] == "episode-1"
+
+    type_response = client.get("/library", params={"item_type": "movie"})
+    assert type_response.status_code == 200
+    type_payload = type_response.json()
+    assert type_payload["total"] == 1
+    assert type_payload["items"][0]["id"] == "movie-1"
+
+    tmdb_response = client.get("/library", params={"has_tmdb": True})
+    assert tmdb_response.status_code == 200
+    tmdb_payload = tmdb_response.json()
+    assert tmdb_payload["total"] == 1
+    assert tmdb_payload["items"][0]["id"] == "movie-1"
+
+    missing_tmdb_response = client.get("/library", params={"has_tmdb": False})
+    assert missing_tmdb_response.status_code == 200
+    missing_tmdb_payload = missing_tmdb_response.json()
+    assert missing_tmdb_payload["total"] == 1
+    assert missing_tmdb_payload["items"][0]["id"] == "episode-1"
+
     detail_response = client.get("/library/movie-1")
     assert detail_response.status_code == 200
     detail = detail_response.json()

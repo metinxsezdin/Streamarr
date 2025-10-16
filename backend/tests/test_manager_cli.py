@@ -79,6 +79,7 @@ def _seed_library(cli_client: TestClient) -> None:
                 item_type="movie",
                 site="dizibox",
                 year=2024,
+                tmdb_id="tmdb-100",
                 variants=[
                     {
                         "source": "dizibox",
@@ -200,6 +201,31 @@ def test_cli_library_list_outputs_metadata(
 
     assert result.exit_code == 0
     assert "\"total\": 2" in result.output
+
+
+def test_cli_library_list_supports_filters(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """library list command should forward optional filters to the API."""
+
+    _seed_library(cli_client)
+
+    result = runner.invoke(
+        cli_app,
+        [
+            "library",
+            "list",
+            "--site",
+            "dizipal",
+            "--item-type",
+            "episode",
+            "--no-has-tmdb",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "\"total\": 1" in result.output
+    assert "episode-1" in result.output
 
 
 def test_cli_library_show_outputs_item_detail(

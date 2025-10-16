@@ -143,6 +143,18 @@ def list_library(
     page: int = typer.Option(1, min=1, help="Page number starting at 1."),
     page_size: int = typer.Option(25, min=1, max=100, help="Number of items per page."),
     query: Optional[str] = typer.Option(None, help="Optional title search term."),
+    site: Optional[str] = typer.Option(
+        None, help="Filter results to a specific source site (e.g., dizibox)."
+    ),
+    item_type: Optional[str] = typer.Option(
+        None, help="Filter results by item type (movie or episode)."
+    ),
+    has_tmdb: Optional[bool] = typer.Option(
+        None,
+        "--has-tmdb/--no-has-tmdb",
+        help="Filter by presence of TMDB metadata.",
+        show_default=False,
+    ),
     api_base: str = _api_base_option(),
 ) -> None:
     """Display library metadata returned by the Manager API."""
@@ -150,6 +162,12 @@ def list_library(
     params: dict[str, object] = {"page": page, "page_size": page_size}
     if query:
         params["query"] = query
+    if site:
+        params["site"] = site
+    if item_type:
+        params["item_type"] = item_type
+    if has_tmdb is not None:
+        params["has_tmdb"] = has_tmdb
 
     with create_client(api_base) as client:
         response = client.get("/library", params=params)
