@@ -88,6 +88,53 @@ def test_config_update_allows_clearing_tmdb_api_key(client: TestClient) -> None:
     assert persisted.tmdb_api_key is None
 
 
+def test_setup_endpoint_persists_configuration(client: TestClient) -> None:
+    """POST /setup should overwrite the stored configuration."""
+
+    payload = {
+        "resolver_url": "http://resolver:5055",
+        "strm_output_path": "/data/strm",
+        "tmdb_api_key": "abc123",
+        "html_title_fetch": False,
+    }
+
+    response = client.post("/setup", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["job"] is None
+    config = ConfigModel.model_validate(body["config"])
+    for key, value in payload.items():
+        assert getattr(config, key) == value
+
+    persisted = ConfigModel.model_validate(client.get("/config").json())
+    for key, value in payload.items():
+        assert getattr(persisted, key) == value
+
+
+def test_setup_endpoint_can_trigger_bootstrap_job(client: TestClient) -> None:
+    """Setup should optionally trigger a bootstrap job and return its payload."""
+
+    response = client.post(
+        "/setup",
+        json={
+            "resolver_url": "http://resolver:5055",
+            "strm_output_path": "/data/strm",
+            "html_title_fetch": True,
+            "run_initial_job": True,
+            "initial_job_type": "bootstrap",
+            "initial_job_payload": {"collect": True},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["job"] is not None
+    job = JobModel.model_validate(body["job"])
+    assert job.type == "bootstrap"
+    assert job.payload == {"collect": True}
+    assert job.status == "completed"
+
 def test_jobs_run_endpoint_creates_completed_job(client: TestClient) -> None:
     """POST /jobs/run should enqueue and complete a job synchronously."""
 

@@ -45,6 +45,60 @@ def health(api_base: str = _api_base_option()) -> None:
         typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
 
 
+@app.command()
+def setup(
+    resolver_url: str = typer.Option(..., help="Resolver service base URL."),
+    strm_output_path: str = typer.Option(..., help="Default STRM export directory."),
+    tmdb_api_key: Optional[str] = typer.Option(None, help="TMDB API key to persist."),
+    html_title_fetch: bool = typer.Option(
+        True,
+        "--html-title-fetch/--no-html-title-fetch",
+        help="Toggle HTML title fallback for catalog builds.",
+        show_default=True,
+    ),
+    run_initial_job: bool = typer.Option(
+        False,
+        "--run-initial-job/--no-run-initial-job",
+        help="Trigger a bootstrap job after saving configuration.",
+        show_default=True,
+    ),
+    initial_job_type: str = typer.Option(
+        "bootstrap",
+        help="Job type invoked when run-initial-job is enabled.",
+        show_default=True,
+    ),
+    initial_job_payload: Optional[str] = typer.Option(
+        None,
+        help="Optional JSON payload forwarded to the bootstrap job.",
+    ),
+    api_base: str = _api_base_option(),
+) -> None:
+    """Persist initial configuration and optionally trigger a bootstrap job."""
+
+    payload: dict[str, object] = {
+        "resolver_url": resolver_url,
+        "strm_output_path": strm_output_path,
+        "html_title_fetch": html_title_fetch,
+        "run_initial_job": run_initial_job,
+        "initial_job_type": initial_job_type,
+    }
+
+    if tmdb_api_key is not None:
+        payload["tmdb_api_key"] = tmdb_api_key
+
+    if initial_job_payload is not None:
+        try:
+            payload["initial_job_payload"] = json.loads(initial_job_payload)
+        except json.JSONDecodeError as exc:  # pragma: no cover - user input path
+            typer.echo(f"Invalid JSON payload: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+
+    with create_client(api_base) as client:
+        response = client.post("/setup", json=payload)
+        response.raise_for_status()
+        typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
+
+
 @config_app.command("show")
 def show_config(api_base: str = _api_base_option()) -> None:
     """Display the persisted manager configuration."""

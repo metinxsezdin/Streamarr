@@ -28,14 +28,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ConfigUpdate'
+              $ref: '#/components/schemas/SetupRequest'
       responses:
         '200':
-          description: Setup completed.
+          description: Setup completed and optional bootstrap job triggered.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Config'
+                $ref: '#/components/schemas/SetupResponse'
   /config:
     get:
       summary: Read configuration
@@ -419,6 +419,7 @@ components:
       required:
         - resolver_url
         - strm_output_path
+        - html_title_fetch
     ResolverProcessStatus:
       type: object
       properties:
@@ -432,7 +433,31 @@ components:
           nullable: true
       required:
         - running
-        - html_title_fetch
+    SetupRequest:
+      allOf:
+        - $ref: '#/components/schemas/Config'
+        - type: object
+          properties:
+            run_initial_job:
+              type: boolean
+              default: false
+            initial_job_type:
+              type: string
+              default: bootstrap
+            initial_job_payload:
+              type: object
+              additionalProperties: true
+              nullable: true
+    SetupResponse:
+      type: object
+      properties:
+        config:
+          $ref: '#/components/schemas/Config'
+        job:
+          $ref: '#/components/schemas/Job'
+          nullable: true
+      required:
+        - config
     ConfigUpdate:
       type: object
       properties:

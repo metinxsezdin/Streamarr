@@ -25,6 +25,28 @@ class ConfigStore:
         with Session(self._engine) as session:
             return read_config(session)
 
+    def replace(self, payload: ConfigModel) -> ConfigModel:
+        """Overwrite the stored configuration with the provided payload."""
+
+        with self._lock, Session(self._engine) as session:
+            record = session.exec(select(ConfigRecord).where(ConfigRecord.id == 1)).one_or_none()
+            if record is None:
+                raise RuntimeError("Configuration record missing from database")
+            record.resolver_url = payload.resolver_url
+            record.strm_output_path = payload.strm_output_path
+            record.tmdb_api_key = payload.tmdb_api_key
+            record.html_title_fetch = payload.html_title_fetch
+            record.updated_at = datetime.utcnow()
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            return ConfigModel(
+                resolver_url=record.resolver_url,
+                strm_output_path=record.strm_output_path,
+                tmdb_api_key=record.tmdb_api_key,
+                html_title_fetch=record.html_title_fetch,
+            )
+
     def update(self, update: ConfigUpdate) -> ConfigModel:
         """Apply updates to the stored configuration."""
 

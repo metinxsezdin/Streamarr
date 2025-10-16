@@ -147,6 +147,61 @@ def test_cli_health_command_outputs_status(runner: CliRunner, cli_client: TestCl
     assert "\"status\": \"ok\"" in result.output
 
 
+def test_cli_setup_persists_configuration(runner: CliRunner, cli_client: TestClient) -> None:
+    """The setup command should write configuration and return it."""
+
+    result = runner.invoke(
+        cli_app,
+        [
+            "setup",
+            "--resolver-url",
+            "http://resolver:5055",
+            "--strm-output-path",
+            "/data/strm",
+            "--tmdb-api-key",
+            "seed-token",
+            "--no-html-title-fetch",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["config"]["resolver_url"] == "http://resolver:5055"
+    assert payload["config"]["html_title_fetch"] is False
+    assert payload["job"] is None
+
+    persisted = cli_client.get("/config").json()
+    assert persisted["resolver_url"] == "http://resolver:5055"
+    assert persisted["tmdb_api_key"] == "seed-token"
+
+
+def test_cli_setup_can_trigger_initial_job(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """Setup command should optionally trigger a bootstrap job."""
+
+    result = runner.invoke(
+        cli_app,
+        [
+            "setup",
+            "--resolver-url",
+            "http://resolver:5055",
+            "--strm-output-path",
+            "/data/strm",
+            "--run-initial-job",
+            "--initial-job-type",
+            "bootstrap",
+            "--initial-job-payload",
+            '{"collect": true}',
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["job"]["type"] == "bootstrap"
+    assert payload["job"]["status"] == "completed"
+    assert payload["job"]["payload"] == {"collect": True}
+
 def test_cli_config_update_modifies_store(runner: CliRunner, cli_client: TestClient) -> None:
     """Config update command should persist changes and print them."""
 

@@ -1,7 +1,7 @@
 """Application factory for the Streamarr Manager API."""
 from fastapi import FastAPI
 
-from .routers import config, health, jobs, library, resolver
+from .routers import config, health, jobs, library, resolver, setup
 from .settings import ManagerSettings
 from .state import AppState
 
@@ -17,6 +17,7 @@ def create_app(settings: ManagerSettings | None = None) -> FastAPI:
     app.state.settings = app_state.settings
 
     for router in (
+        setup.router,
         health.router,
         config.router,
         jobs.router,

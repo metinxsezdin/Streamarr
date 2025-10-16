@@ -4,13 +4,8 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from ..dependencies import get_job_log_store, get_job_store
-from ..schemas import (
-    JobCancelRequest,
-    JobLogCreate,
-    JobLogModel,
-    JobModel,
-    JobRunRequest,
-)
+from ..schemas import JobCancelRequest, JobLogCreate, JobLogModel, JobModel, JobRunRequest
+from ..services.job_runner import run_sync_job
 from ..stores.job_log_store import JobLogStore
 from ..stores.job_store import JobStore
 
@@ -25,26 +20,7 @@ def run_job(
 ) -> JobModel:
     """Enqueue a job and synchronously mark it as completed."""
 
-    job = store.enqueue(request.type, request.payload)
-    log_store.append(
-        job.id,
-        JobLogCreate(
-            level="info",
-            message=f"Job {request.type} enqueued",
-            context={"payload": request.payload} if request.payload else None,
-        ),
-    )
-    job = store.mark_running(job.id, worker_id="manager-api")
-    log_store.append(
-        job.id,
-        JobLogCreate(level="info", message="Job started", context=None),
-    )
-    job = store.mark_completed(job.id, progress=1.0)
-    log_store.append(
-        job.id,
-        JobLogCreate(level="info", message="Job completed", context=None),
-    )
-    return job
+    return run_sync_job(store, log_store, request.type, request.payload)
 
 
 @router.get("", response_model=list[JobModel])

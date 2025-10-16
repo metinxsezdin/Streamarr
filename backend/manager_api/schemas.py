@@ -47,6 +47,33 @@ class ConfigUpdate(BaseModel):
     html_title_fetch: bool | None = Field(default=None)
 
 
+class SetupRequest(ConfigModel):
+    """Payload accepted by the initial setup endpoint."""
+
+    run_initial_job: bool = Field(
+        default=False,
+        description="Whether to trigger a bootstrap job after persisting configuration.",
+    )
+    initial_job_type: str = Field(
+        default="bootstrap",
+        description="Job type enqueued when run_initial_job is enabled.",
+    )
+    initial_job_payload: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional payload forwarded to the bootstrap job.",
+    )
+
+
+class SetupResponse(BaseModel):
+    """Response returned after performing initial setup."""
+
+    config: ConfigModel = Field(description="Persisted configuration state after setup.")
+    job: JobModel | None = Field(
+        default=None,
+        description="Job triggered as part of setup when run_initial_job is enabled.",
+    )
+
+
 class JobModel(BaseModel):
     """Represents a manager pipeline job."""
 
