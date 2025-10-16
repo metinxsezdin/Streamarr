@@ -11,3 +11,6 @@ obj/
 InspectJellyfin/
 dist/
 .venv/
+node_modules/
+.expo/
+.expo-shared/
