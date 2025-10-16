@@ -179,6 +179,8 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+        '502':
+          description: Resolver unreachable or responded with an error.
 components:
   schemas:
     HealthStatus:

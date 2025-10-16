@@ -2,6 +2,7 @@
 from fastapi import Depends, Request
 from sqlmodel import Session
 
+from .services import ResolverService
 from .state import AppState
 from .stores.config_store import ConfigStore
 from .stores.job_store import JobStore
@@ -27,6 +28,12 @@ def get_library_store(app_state: AppState = Depends(get_app_state)) -> LibrarySt
     """Return the library store dependency."""
 
     return app_state.library_store
+
+
+def get_resolver_service(app_state: AppState = Depends(get_app_state)) -> ResolverService:
+    """Expose the resolver service helper for request handlers."""
+
+    return app_state.resolver_service
 
 
 def get_session(app_state: AppState = Depends(get_app_state)):

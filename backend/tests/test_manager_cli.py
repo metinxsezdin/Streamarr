@@ -22,6 +22,21 @@ from backend.manager_api.models import LibraryItemRecord  # noqa: E402
 from backend.manager_cli import app as cli_app  # noqa: E402
 from backend.manager_cli import client as client_module  # noqa: E402
 
+
+class StubResolverService:
+    """Simple stub for the resolver service dependency."""
+
+    def __init__(self, payload: dict[str, object] | None = None, error: Exception | None = None) -> None:
+        self.payload = payload or {"status": "ok"}
+        self.error = error
+        self.calls: list[str] = []
+
+    def health(self, base_url: str) -> dict[str, object]:
+        self.calls.append(base_url)
+        if self.error:
+            raise self.error
+        return dict(self.payload)
+
 cli_app_module = importlib.import_module("backend.manager_cli.app")
 
 
@@ -198,3 +213,18 @@ def test_cli_library_show_outputs_item_detail(
 
     assert result.exit_code == 0
     assert "Example Movie" in result.output
+
+
+def test_cli_resolver_health_outputs_payload(
+    runner: CliRunner, cli_client: TestClient
+) -> None:
+    """resolver health command should print the resolver payload."""
+
+    stub = StubResolverService(payload={"status": "ok", "cache_size": 7})
+    cli_client.app.state.app_state.resolver_service = stub
+
+    result = runner.invoke(cli_app, ["resolver", "health"])
+
+    assert result.exit_code == 0
+    assert "\"cache_size\": 7" in result.output
+    assert stub.calls == ["http://localhost:5055"]

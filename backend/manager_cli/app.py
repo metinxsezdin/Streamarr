@@ -18,6 +18,8 @@ jobs_app = typer.Typer(help="Inspect and trigger manager jobs.")
 app.add_typer(jobs_app, name="jobs")
 library_app = typer.Typer(help="Browse resolver library metadata.")
 app.add_typer(library_app, name="library")
+resolver_app = typer.Typer(help="Interact with the resolver service via the manager API.")
+app.add_typer(resolver_app, name="resolver")
 
 
 def _api_base_option() -> typer.Option:
@@ -164,5 +166,15 @@ def show_library_item(
 
     with create_client(api_base) as client:
         response = client.get(f"/library/{item_id}")
+        response.raise_for_status()
+        typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
+
+
+@resolver_app.command("health")
+def resolver_health(api_base: str = _api_base_option()) -> None:
+    """Display the proxied resolver health payload."""
+
+    with create_client(api_base) as client:
+        response = client.get("/resolver/health")
         response.raise_for_status()
         typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))

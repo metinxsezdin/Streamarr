@@ -16,6 +16,9 @@ if str(PROJECT_ROOT) not in sys.path:
 from backend.manager_api import create_app  # noqa: E402
 from backend.manager_api.models import LibraryItemRecord  # noqa: E402
 from backend.manager_api.schemas import ConfigModel, JobModel  # noqa: E402
+from backend.manager_api.services.resolver_service import (  # noqa: E402
+    ResolverServiceError,
+)
 from backend.manager_api.settings import ManagerSettings  # noqa: E402
 
 
@@ -181,3 +184,43 @@ def test_library_detail_returns_404_for_missing_item(client: TestClient) -> None
     response = client.get("/library/missing")
 
     assert response.status_code == 404
+
+
+def test_resolver_health_proxies_resolver_payload(client: TestClient) -> None:
+    """GET /resolver/health should return the proxied resolver response."""
+
+    stub = StubResolverService(payload={"status": "ok", "cache_size": 3})
+    client.app.state.app_state.resolver_service = stub
+
+    response = client.get("/resolver/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "cache_size": 3}
+    assert stub.calls == ["http://localhost:5055"]
+
+
+def test_resolver_health_returns_502_on_failure(client: TestClient) -> None:
+    """Resolver failures should be surfaced as a 502 response."""
+
+    stub = StubResolverService(error=ResolverServiceError("resolver offline"))
+    client.app.state.app_state.resolver_service = stub
+
+    response = client.get("/resolver/health")
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "resolver offline"
+
+
+class StubResolverService:
+    """Helper stub that records resolver health calls."""
+
+    def __init__(self, payload: dict[str, object] | None = None, error: Exception | None = None) -> None:
+        self.payload = payload or {"status": "ok"}
+        self.error = error
+        self.calls: list[str] = []
+
+    def health(self, base_url: str) -> dict[str, object]:
+        self.calls.append(base_url)
+        if self.error:
+            raise self.error
+        return dict(self.payload)
