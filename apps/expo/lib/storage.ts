@@ -3,7 +3,8 @@ import { Platform } from "react-native";
 
 import type { ConfigModel } from "@/types/api";
 
-const SESSION_STORAGE_KEY = "streamarr-manager/session";
+const SESSION_STORAGE_KEY = "streamarr_manager_session";
+const LEGACY_BROWSER_KEYS = ["streamarr-manager/session"];
 
 export interface PersistedSession {
   baseUrl: string;
@@ -69,7 +70,12 @@ export async function loadSession(): Promise<PersistedSession | null> {
     return null;
   }
 
-  const value = storage.getItem(SESSION_STORAGE_KEY);
+  const value =
+    storage.getItem(SESSION_STORAGE_KEY) ??
+    LEGACY_BROWSER_KEYS.map((key) => storage.getItem(key)).find(
+      (item): item is string => item !== null,
+    ) ??
+    null;
   if (!value) {
     return null;
   }
@@ -78,6 +84,7 @@ export async function loadSession(): Promise<PersistedSession | null> {
     return JSON.parse(value) as PersistedSession;
   } catch {
     storage.removeItem(SESSION_STORAGE_KEY);
+    LEGACY_BROWSER_KEYS.forEach((key) => storage.removeItem(key));
     return null;
   }
 }
@@ -90,5 +97,6 @@ export async function clearSession(): Promise<void> {
   const storage = getBrowserStorage();
   if (storage) {
     storage.removeItem(SESSION_STORAGE_KEY);
+    LEGACY_BROWSER_KEYS.forEach((key) => storage.removeItem(key));
   }
 }
