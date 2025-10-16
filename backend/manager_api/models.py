@@ -31,6 +31,7 @@ class JobRecord(SQLModel, table=True):
     type: str = Field(index=True)
     status: str = Field(default="queued", index=True)
     progress: float = Field(default=0.0)
+    worker_id: str | None = Field(default=None, index=True)
     payload: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     started_at: datetime | None = Field(default=None, index=True)
     finished_at: datetime | None = Field(default=None, index=True)

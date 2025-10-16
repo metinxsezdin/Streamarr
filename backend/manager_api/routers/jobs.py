@@ -15,7 +15,7 @@ def run_job(request: JobRunRequest, store: JobStore = Depends(get_job_store)) ->
     """Enqueue a job and synchronously mark it as completed."""
 
     job = store.enqueue(request.type, request.payload)
-    job = store.mark_running(job.id)
+    job = store.mark_running(job.id, worker_id="manager-api")
     return store.mark_completed(job.id, progress=1.0)
 
 

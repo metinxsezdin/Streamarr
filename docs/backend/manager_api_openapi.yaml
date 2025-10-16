@@ -351,6 +351,9 @@ components:
         progress:
           type: number
           format: float
+        worker_id:
+          type: string
+          nullable: true
         payload:
           type: object
           additionalProperties: true
@@ -371,6 +374,10 @@ components:
           nullable: true
         error_message:
           type: string
+          nullable: true
+        duration_seconds:
+          type: number
+          format: float
           nullable: true
       required:
         - id

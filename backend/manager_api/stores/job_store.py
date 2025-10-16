@@ -66,7 +66,13 @@ class JobStore:
             record = session.get(JobRecord, job_id)
             return _to_model(record) if record else None
 
-    def mark_running(self, job_id: str, *, progress: float | None = None) -> JobModel:
+    def mark_running(
+        self,
+        job_id: str,
+        *,
+        progress: float | None = None,
+        worker_id: str | None = None,
+    ) -> JobModel:
         """Transition a job into the running state."""
 
         return self._update_job(
@@ -74,6 +80,7 @@ class JobStore:
             status="running",
             progress=0.0 if progress is None else progress,
             started_at=datetime.utcnow(),
+            worker_id=worker_id,
         )
 
     def mark_completed(self, job_id: str, *, progress: float = 1.0) -> JobModel:
@@ -123,6 +130,7 @@ class JobStore:
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
         error_message: str | None = None,
+        worker_id: str | None = None,
     ) -> JobModel:
         with self._lock, Session(self._engine) as session:
             record = session.get(JobRecord, job_id)
@@ -138,6 +146,8 @@ class JobStore:
                 record.finished_at = finished_at
             if error_message is not None:
                 record.error_message = error_message
+            if worker_id is not None:
+                record.worker_id = worker_id
             record.updated_at = datetime.utcnow()
 
             session.add(record)
@@ -149,15 +159,23 @@ class JobStore:
 def _to_model(record: JobRecord) -> JobModel:
     """Convert a JobRecord into the public response model."""
 
+    duration_seconds: float | None = None
+    if record.started_at and record.finished_at:
+        duration_seconds = (
+            record.finished_at - record.started_at
+        ).total_seconds()
+
     return JobModel(
         id=record.id,
         type=record.type,
         status=record.status,
         progress=record.progress,
+        worker_id=record.worker_id,
         payload=record.payload,
         created_at=record.created_at,
         updated_at=record.updated_at,
         started_at=record.started_at,
         finished_at=record.finished_at,
         error_message=record.error_message,
+        duration_seconds=duration_seconds,
     )

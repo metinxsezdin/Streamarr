@@ -93,10 +93,13 @@ def test_jobs_run_endpoint_creates_completed_job(client: TestClient) -> None:
     job = JobModel.model_validate(response.json())
     assert job.status == "completed"
     assert job.progress == 1.0
+    assert job.worker_id == "manager-api"
     assert job.payload == {"full": True}
     assert job.created_at <= job.updated_at
     assert job.started_at is not None
     assert job.finished_at is not None
+    assert job.duration_seconds is not None
+    assert job.duration_seconds >= 0
 
     list_response = client.get("/jobs", params={"limit": 5})
     assert list_response.status_code == 200
@@ -126,7 +129,7 @@ def test_jobs_list_supports_status_and_type_filters(client: TestClient) -> None:
     job_store = app_state.job_store
 
     completed = job_store.enqueue("collect")
-    job_store.mark_running(completed.id)
+    job_store.mark_running(completed.id, worker_id="runner-1")
     job_store.mark_completed(completed.id)
 
     failed = job_store.enqueue("collect")
@@ -148,6 +151,7 @@ def test_jobs_list_supports_status_and_type_filters(client: TestClient) -> None:
     assert status_response.status_code == 200
     status_payload = [JobModel.model_validate(item) for item in status_response.json()]
     assert {job.status for job in status_payload} == {"completed", "failed", "cancelled"}
+    assert any(job.worker_id == "runner-1" for job in status_payload)
     assert all(job.id != queued.id for job in status_payload)
 
     type_response = client.get("/jobs", params={"type": "collect", "limit": 10})
@@ -176,6 +180,7 @@ def test_jobs_cancel_endpoint_marks_job_cancelled(client: TestClient) -> None:
     assert payload.status == "cancelled"
     assert payload.error_message == "user requested"
     assert payload.finished_at is not None
+    assert payload.duration_seconds is None
 
     detail_response = client.get(f"/jobs/{job.id}")
     assert detail_response.status_code == 200

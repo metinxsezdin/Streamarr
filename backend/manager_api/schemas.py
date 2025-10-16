@@ -41,6 +41,9 @@ class JobModel(BaseModel):
     type: str
     status: Literal["queued", "running", "completed", "failed", "cancelled"]
     progress: float = Field(ge=0, le=1)
+    worker_id: str | None = Field(
+        default=None, description="Identifier for the worker processing the job."
+    )
     payload: dict[str, Any] | None = Field(
         default=None, description="Optional JSON payload forwarded to the runner."
     )
@@ -53,6 +56,10 @@ class JobModel(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error_message: str | None = None
+    duration_seconds: float | None = Field(
+        default=None,
+        description="Execution duration calculated from started and finished timestamps.",
+    )
 
 
 class JobRunRequest(BaseModel):

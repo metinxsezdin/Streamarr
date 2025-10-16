@@ -181,6 +181,8 @@ def test_cli_jobs_run_creates_completed_job(runner: CliRunner, cli_client: TestC
     payload = json.loads(result.output)
     assert payload["status"] == "completed"
     assert payload["payload"] == {"refresh": True}
+    assert payload["worker_id"] == "manager-api"
+    assert payload["duration_seconds"] >= 0
     assert "created_at" in payload
 
     jobs = cli_client.get("/jobs").json()
@@ -236,6 +238,8 @@ def test_cli_jobs_show_displays_single_job(runner: CliRunner, cli_client: TestCl
     payload = json.loads(result.output)
     assert payload["id"] == job_id
     assert payload["payload"] == {"full": True}
+    assert payload["worker_id"] == "manager-api"
+    assert payload["duration_seconds"] >= 0
 
 
 def test_cli_jobs_show_handles_missing_job(
@@ -267,6 +271,7 @@ def test_cli_jobs_cancel_marks_job_cancelled(
     payload = json.loads(result.output)
     assert payload["status"] == "cancelled"
     assert payload["error_message"] == "user requested"
+    assert payload["duration_seconds"] is None
 
 
 def test_cli_jobs_cancel_handles_missing_job(
