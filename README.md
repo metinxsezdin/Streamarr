@@ -88,12 +88,22 @@ docker compose down
 
    # or enrich with TMDB metadata
    python scripts/catalog_builder.py --tmdb-key "<TMDB_KEY>" --chunk-size 5000
+
+   # store results directly in SQLite (no JSON output)
+   python scripts/catalog_builder.py --skip-tmdb --skip-json --sqlite-db data/catalog.sqlite
+
+   # pull page <title> tags for better names (slow; hits each URL once)
+   python scripts/catalog_builder.py --fetch-html-titles --title-fetch-limit 500
    ```
-   Outputs chunked files such as `data/catalog.001.json`, keeping each JSON small enough for editors. Leave out `--chunk-size` to emit a single `catalog.json`.
+   Outputs chunked files such as `data/catalog.movies.001.json` and `data/catalog.episodes.001.json`, keeping each JSON small enough for editors. Leave out `--chunk-size` to emit single `catalog.movies.json` / `catalog.episodes.json` files.
 
    Useful flags:
    - `--skip-tmdb` -> skip metadata lookups even if a TMDB key is configured.
    - `--chunk-size <N>` -> split the catalog into files with at most `N` entries for easier inspection.
+   - `--sqlite-db <path>` -> write the catalog into a SQLite database (tables are recreated on each run).
+   - `--skip-json` -> suppress JSON output (useful when only SQLite export is desired).
+   - `--fetch-html-titles` -> fetch the source page `<title>` to improve initial names (adds HTTP requests; combine with `--title-fetch-limit` to sample).
+   - `--title-fetch-limit <N>` -> stop fetching HTML titles after N requests (omit for all entries).
 
 4. **Generate STRM Files**
    ```bash
@@ -155,6 +165,7 @@ python scripts/update_manifest.py \
 python scripts/collect_links.py --site hdfilm
 python scripts/collect_links.py --site dizibox --max-shows 50
 python scripts/catalog_builder.py --chunk-size 5000 --skip-tmdb
+python scripts/catalog_builder.py --skip-json --sqlite-db data/catalog.sqlite --skip-tmdb
 python scripts/strm_generator.py
 python backend/resolver/api.py
 python scripts/update_manifest.py ...

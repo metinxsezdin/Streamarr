@@ -5,14 +5,18 @@ Build a unified metadata catalog with multi-source support for STRM generation.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 import re
+import sqlite3
 import sys
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
+
+import requests
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT_DIR / "backend"))
@@ -78,6 +82,13 @@ TOKEN_REPLACEMENTS = {
 
 ROMAN_NUMERALS = {"i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"}
 SUFFIX_KEEP_BASES = {"part", "bolum", "episode"}
+REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) "
+        "Gecko/20100101 Firefox/121.0"
+    )
+}
+TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 
 
 def _site_priority(site: str) -> int:
@@ -100,7 +111,12 @@ def _clean_slug_tokens(slug: str) -> List[str]:
     cleaned = tokens[:]
     while cleaned and (
         cleaned[-1] in TITLE_STOPWORDS
-        or (cleaned[-1].isdigit() and len(cleaned[-1]) <= 2 and len(cleaned) > 1)
+        or (
+            cleaned[-1].isdigit()
+            and len(cleaned[-1]) <= 2
+            and len(cleaned) > 1
+            and not cleaned[-2].isdigit()
+        )
         or re.fullmatch(r"\d{3,4}p", cleaned[-1])
     ):
         cleaned.pop()
@@ -116,13 +132,35 @@ def _clean_slug_tokens(slug: str) -> List[str]:
             continue
         filtered.append(token)
 
-    return filtered or tokens
+    result = list(filtered or tokens)
+    while result and result[0] == "1":
+        result.pop(0)
+    return result
+
+
+def _merge_possessive_tokens(tokens: List[str]) -> List[str]:
+    merged: List[str] = []
+    for token in tokens:
+        if (
+            token == "s"
+            and merged
+            and not merged[-1].isdigit()
+            and not merged[-1].endswith("'s")
+        ):
+            merged[-1] = merged[-1] + "'s"
+        else:
+            merged.append(token)
+    return merged
 
 
 def guess_title_from_slug(slug: str) -> str:
     tokens = _clean_slug_tokens(slug)
+    tokens = _merge_possessive_tokens(tokens)
     if not tokens:
         return slug.replace("-", " ").strip().title()
+
+    if all(token.isdigit() for token in tokens):
+        return "-".join(tokens)
 
     words: List[str] = []
     for token in tokens:
@@ -163,6 +201,72 @@ def guess_title_from_slug(slug: str) -> str:
     if not title:
         title = slug.replace("-", " ").strip()
     return title
+
+
+def _clean_site_title(site: str, raw_title: str, slug: Optional[str] = None) -> str:
+    title = raw_title.strip()
+    if not title:
+        return raw_title
+
+    def _strip_suffix(text: str, patterns: List[str]) -> str:
+        lowered = text.lower()
+        for pattern in patterns:
+            if lowered.endswith(pattern):
+                return text[: -len(pattern)].rstrip(" -|")
+        return text
+
+    title = html.unescape(title)
+    title = re.sub(r"\s+", " ", title).strip()
+
+    if slug:
+        slug_tokens = [token for token in slug.split("-") if token]
+        if slug_tokens and slug_tokens[0] == "1":
+            stripped = re.sub(r"^[1]+\s+", "", title).strip()
+            if stripped:
+                title = stripped
+
+    if site == "hdfilm":
+        title = re.sub(r"\s*[\-|]\s*HD\s*Film.*$", "", title, flags=re.IGNORECASE)
+        title = re.sub(r"\s*\|\s*HDFilm.*$", "", title, flags=re.IGNORECASE)
+        title = _strip_suffix(title, [" izle", " hd izle", " full izle", " hd film"])
+    elif site == "dizibox":
+        title = re.sub(r"\s*[\-|]\s*Dizibox.*$", "", title, flags=re.IGNORECASE)
+        title = re.sub(r"\s*\|\s*Dizibox.*$", "", title, flags=re.IGNORECASE)
+        title = _strip_suffix(
+            title,
+            [
+                " izle",
+                " full izle",
+                " bolum izle",
+                " bölüm izle",
+            ],
+        )
+    else:
+        title = _strip_suffix(title, [" izle", " full izle", " full i̇zle"])
+
+    return title.strip(" -|") or raw_title.strip()
+
+
+def fetch_page_title(
+    session: requests.Session,
+    site: str,
+    url: str,
+    slug: Optional[str] = None,
+    timeout: float = 15.0,
+) -> Optional[str]:
+    try:
+        response = session.get(url, timeout=timeout)
+        response.raise_for_status()
+    except requests.RequestException:
+        return None
+    text = response.text
+    match = TITLE_RE.search(text)
+    if not match:
+        return None
+    raw_title = match.group(1)
+    if not raw_title:
+        return None
+    return _clean_site_title(site, raw_title, slug=slug)
 
 
 @dataclass
@@ -475,32 +579,163 @@ def group_entries(raw_entries: List[RawEntry]) -> List[CatalogEntry]:
     )
 
 
-def persist_catalog(entries: List[CatalogEntry], output_path: Path, chunk_size: Optional[int] = None) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    if not chunk_size or chunk_size <= 0:
-        payload = [entry.to_dict() for entry in entries]
-        tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
-        tmp_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-        tmp_path.replace(output_path)
-        print(f"[catalog] wrote {len(entries)} entries to {output_path}")
-        return
+def persist_catalog_sqlite(entries: List[CatalogEntry], sqlite_path: Path) -> None:
+    sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(str(sqlite_path)) as conn:
+        conn.execute("PRAGMA foreign_keys = ON;")
+        conn.executescript(
+            """
+CREATE TABLE IF NOT EXISTS media_items (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    original_title TEXT,
+    subtitle TEXT,
+    year INTEGER,
+    overview TEXT,
+    poster TEXT,
+    backdrop TEXT,
+    tmdb_id INTEGER,
+    site TEXT NOT NULL,
+    url TEXT NOT NULL,
+    season INTEGER,
+    episode INTEGER,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
-    stem = output_path.stem
-    suffix = output_path.suffix or ".json"
-    total_chunks = (len(entries) + chunk_size - 1) // chunk_size
-    chunk_paths: List[Path] = []
-    for index, start in enumerate(range(0, len(entries), chunk_size), 1):
-        chunk_entries = entries[start : start + chunk_size]
-        payload = [entry.to_dict() for entry in chunk_entries]
-        chunk_name = f"{stem}.{index:03d}{suffix}"
-        chunk_path = output_path.with_name(chunk_name)
-        tmp_path = chunk_path.with_suffix(chunk_path.suffix + ".tmp")
-        tmp_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-        tmp_path.replace(chunk_path)
-        chunk_paths.append(chunk_path)
-    print(f"[catalog] wrote {len(entries)} entries across {total_chunks} files:")
-    for path in chunk_paths:
-        print(f"  - {path}")
+CREATE TABLE IF NOT EXISTS media_sources (
+    media_id TEXT NOT NULL,
+    site TEXT NOT NULL,
+    url TEXT NOT NULL,
+    site_entry_id TEXT,
+    priority INTEGER,
+    is_primary INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(media_id) REFERENCES media_items(id) ON DELETE CASCADE,
+    PRIMARY KEY (media_id, site, url)
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_type_title
+    ON media_items(type, title);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_tmdb
+    ON media_items(tmdb_id);
+
+CREATE INDEX IF NOT EXISTS idx_media_sources_priority
+    ON media_sources(media_id, priority, site);
+"""
+        )
+        with conn:
+            conn.execute("DELETE FROM media_sources;")
+            conn.execute("DELETE FROM media_items;")
+
+            item_sql = """
+INSERT INTO media_items (
+    id, type, title, original_title, subtitle, year, overview, poster, backdrop,
+    tmdb_id, site, url, season, episode, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);
+"""
+            items_payload = []
+            for entry in entries:
+                year_value = entry.year if entry.year else None
+                items_payload.append(
+                    (
+                        entry.id,
+                        entry.type,
+                        entry.title,
+                        entry.original_title or None,
+                        entry.subtitle or None,
+                        year_value,
+                        entry.overview or None,
+                        entry.poster or None,
+                        entry.backdrop or None,
+                        entry.tmdb_id,
+                        entry.site,
+                        entry.url,
+                        entry.season,
+                        entry.episode,
+                    )
+                )
+            conn.executemany(item_sql, items_payload)
+
+            source_sql = """
+INSERT INTO media_sources (
+    media_id, site, url, site_entry_id, priority, is_primary
+) VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT(media_id, site, url) DO UPDATE SET
+    site_entry_id=excluded.site_entry_id,
+    priority=excluded.priority,
+    is_primary=excluded.is_primary;
+"""
+            sources_payload: List[tuple] = []
+            for entry in entries:
+                for source in entry.sources:
+                    is_primary = 1 if source.site == entry.site and source.url == entry.url else 0
+                    sources_payload.append(
+                        (
+                            entry.id,
+                            source.site,
+                            source.url,
+                            source.site_entry_id,
+                            source.priority,
+                            is_primary,
+                        )
+                    )
+            if sources_payload:
+                conn.executemany(source_sql, sources_payload)
+    print(f"[catalog] wrote {len(entries)} entries to {sqlite_path}")
+
+
+def persist_catalog(
+    entries: List[CatalogEntry],
+    output_path: Optional[Path],
+    *,
+    chunk_size: Optional[int] = None,
+    sqlite_path: Optional[Path] = None,
+    write_json: bool = True,
+) -> None:
+    if write_json:
+        if output_path is None:
+            raise ValueError("output_path must be provided when write_json is True")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        stem = output_path.stem
+        suffix = output_path.suffix or ".json"
+
+        type_labels = {"movie": "movies"}
+        partitions: Dict[str, List[CatalogEntry]] = {}
+        for entry in entries:
+            label = type_labels.get(entry.type, "episodes")
+            partitions.setdefault(label, []).append(entry)
+
+        for label, partition in partitions.items():
+            if not partition:
+                continue
+            label_stem = f"{stem}.{label}"
+            if not chunk_size or chunk_size <= 0:
+                payload = [entry.to_dict() for entry in partition]
+                chunk_path = output_path.with_name(f"{label_stem}{suffix}")
+                tmp_path = chunk_path.with_suffix(chunk_path.suffix + ".tmp")
+                tmp_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+                tmp_path.replace(chunk_path)
+                print(f"[catalog] wrote {len(partition)} {label} entries to {chunk_path}")
+            else:
+                total_chunks = (len(partition) + chunk_size - 1) // chunk_size
+                for index, start in enumerate(range(0, len(partition), chunk_size), 1):
+                    chunk_entries = partition[start : start + chunk_size]
+                    payload = [entry.to_dict() for entry in chunk_entries]
+                    chunk_name = f"{label_stem}.{index:03d}{suffix}"
+                    chunk_path = output_path.with_name(chunk_name)
+                    tmp_path = chunk_path.with_suffix(chunk_path.suffix + ".tmp")
+                    tmp_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+                    tmp_path.replace(chunk_path)
+                    print(f"[catalog] wrote {label} chunk {index}/{total_chunks}: {chunk_path}")
+                print(
+                    f"[catalog] completed JSON export for {label} "
+                    f"({len(partition)} entries across {total_chunks} files)"
+                )
+
+    if sqlite_path is not None:
+        persist_catalog_sqlite(entries, sqlite_path)
 
 
 def parse_args() -> argparse.Namespace:
@@ -549,6 +784,32 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip TMDB metadata enrichment even if a key is configured",
     )
+    parser.add_argument(
+        "--sqlite-db",
+        type=Path,
+        help="Optional SQLite database path for catalog persistence (e.g., data/catalog.sqlite)",
+    )
+    parser.add_argument(
+        "--skip-json",
+        action="store_true",
+        help="Skip writing JSON output (useful when only SQLite export is desired)",
+    )
+    parser.add_argument(
+        "--fetch-html-titles",
+        action="store_true",
+        help="Fetch <title> tags from source pages to improve initial titles",
+    )
+    parser.add_argument(
+        "--title-fetch-limit",
+        type=int,
+        help="Optional limit on the number of HTML title fetches (for testing/troubleshooting)",
+    )
+    parser.add_argument(
+        "--title-fetch-timeout",
+        type=float,
+        default=15.0,
+        help="Per-request timeout in seconds when fetching HTML titles (default: 15.0)",
+    )
     return parser.parse_args()
 
 
@@ -566,6 +827,30 @@ def main() -> None:
 
     raw_entries = [*hdfilm_raw, *dizibox_raw]
     print(f"[catalog] collected {len(raw_entries)} raw entries (movies={len(hdfilm_raw)}, episodes={len(dizibox_raw)})")
+
+    if args.fetch_html_titles:
+        session = requests.Session()
+        session.headers.update(REQUEST_HEADERS)
+        title_requests = 0
+        updated_titles = 0
+        for idx, entry in enumerate(raw_entries, 1):
+            if args.title_fetch_limit is not None and title_requests >= args.title_fetch_limit:
+                break
+            title = fetch_page_title(
+                session,
+                entry.site,
+                entry.url,
+                slug=entry.show_slug,
+                timeout=args.title_fetch_timeout,
+            )
+            title_requests += 1
+            if title:
+                if title != entry.title:
+                    entry.title = title
+                    updated_titles += 1
+            if idx % 100 == 0:
+                print(f"[catalog] fetched HTML titles for {title_requests} entries (updated {updated_titles})")
+        print(f"[catalog] HTML title fetch complete: requests={title_requests}, updated={updated_titles}")
 
     metadata_enabled = fetcher.enabled and not args.skip_tmdb
     if metadata_enabled:
@@ -587,7 +872,15 @@ def main() -> None:
             print("[catalog] TMDB key missing; skipping metadata enrichment")
 
     grouped_entries = group_entries(raw_entries)
-    persist_catalog(grouped_entries, args.output, chunk_size=args.chunk_size)
+    if args.skip_json and not args.sqlite_db:
+        print("[catalog] --skip-json specified without --sqlite-db; no output will be written")
+    persist_catalog(
+        grouped_entries,
+        None if args.skip_json else args.output,
+        chunk_size=args.chunk_size,
+        sqlite_path=args.sqlite_db,
+        write_json=not args.skip_json,
+    )
 
 
 if __name__ == "__main__":
