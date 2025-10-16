@@ -43,7 +43,7 @@ interface FilterChipProps {
   onPress: () => void;
 }
 
-function FilterChip({ label, selected, onPress }: FilterChipProps): JSX.Element {
+function FilterChip({ label, selected, onPress }: FilterChipProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -56,7 +56,7 @@ function FilterChip({ label, selected, onPress }: FilterChipProps): JSX.Element 
   );
 }
 
-function SkeletonCard(): JSX.Element {
+function SkeletonCard() {
   return (
     <View style={styles.skeletonCard}>
       <View style={styles.skeletonTitle} />
@@ -67,7 +67,7 @@ function SkeletonCard(): JSX.Element {
   );
 }
 
-function LibraryItemCard({ item, onPress }: { item: LibraryItemModel; onPress: () => void }): JSX.Element {
+function LibraryItemCard({ item, onPress }: { item: LibraryItemModel; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={styles.itemCard}>
       <View style={styles.itemHeader}>
@@ -92,7 +92,7 @@ interface LibraryDetailModalProps {
   onClose: () => void;
 }
 
-function LibraryDetailModal({ itemId, onClose }: LibraryDetailModalProps): JSX.Element {
+function LibraryDetailModal({ itemId, onClose }: LibraryDetailModalProps) {
   const { session } = useAuth();
   const isVisible = Boolean(itemId);
 
@@ -239,7 +239,7 @@ function LibraryDetailModal({ itemId, onClose }: LibraryDetailModalProps): JSX.E
   );
 }
 
-export default function LibraryScreen(): JSX.Element {
+export default function LibraryScreen() {
   const { session } = useAuth();
   const [search, setSearch] = useState("");
   const [selectedSites, setSelectedSites] = useState<string[]>([]);

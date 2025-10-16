@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 
-export default function LogsScreen(): JSX.Element {
+export default function LogsScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Loglar</Text>

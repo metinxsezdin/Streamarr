@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 const TAB_ICON_COLOR = "#60a5fa";
 const TAB_INACTIVE_COLOR = "#94a3b8";
 
-export default function TabLayout(): JSX.Element {
+export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{

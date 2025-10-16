@@ -70,7 +70,7 @@ interface FilterChipProps {
   onPress: () => void;
 }
 
-function FilterChip({ label, selected, onPress }: FilterChipProps): JSX.Element {
+function FilterChip({ label, selected, onPress }: FilterChipProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -83,7 +83,7 @@ function FilterChip({ label, selected, onPress }: FilterChipProps): JSX.Element 
   );
 }
 
-function JobSkeleton(): JSX.Element {
+function JobSkeleton() {
   return (
     <View style={styles.jobCard}>
       <View style={styles.skeletonLineWide} />
@@ -95,7 +95,7 @@ function JobSkeleton(): JSX.Element {
   );
 }
 
-function JobRow({ job, onPress }: { job: JobModel; onPress: () => void }): JSX.Element {
+function JobRow({ job, onPress }: { job: JobModel; onPress: () => void }) {
   const progressPercent = Math.min(100, Math.max(0, Math.round((job.progress ?? 0) * 100)));
   const statusStyleKey = `status${job.status}` as keyof typeof styles;
   const statusStyle = styles[statusStyleKey] ?? styles.statusDefault;
@@ -243,7 +243,7 @@ interface JobDetailModalProps {
   onClose: () => void;
 }
 
-function JobDetailModal({ jobId, onClose }: JobDetailModalProps): JSX.Element {
+function JobDetailModal({ jobId, onClose }: JobDetailModalProps) {
   const { session } = useAuth();
 
   const jobQuery = useQuery<JobModel>({
@@ -434,7 +434,7 @@ function JobDetailModal({ jobId, onClose }: JobDetailModalProps): JSX.Element {
   );
 }
 
-export default function JobsScreen(): JSX.Element {
+export default function JobsScreen() {
   const { session } = useAuth();
   const [selectedStatuses, setSelectedStatuses] = useState<JobStatus[]>([]);
   const [jobType, setJobType] = useState("");

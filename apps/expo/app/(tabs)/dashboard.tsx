@@ -22,7 +22,7 @@ function formatDate(value: string | null): string {
   return date.toLocaleString();
 }
 
-export default function DashboardScreen(): JSX.Element {
+export default function DashboardScreen() {
   const { session } = useAuth();
 
   const healthQuery = useQuery({

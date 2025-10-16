@@ -14,7 +14,7 @@ import {
 import { useAuth } from "@/providers/AuthProvider";
 import type { ConfigModel } from "@/types/api";
 
-export default function SettingsScreen(): JSX.Element {
+export default function SettingsScreen() {
   const { session, updateSession, signOut } = useAuth();
   const [resolverUrl, setResolverUrl] = useState("http://localhost:5055");
   const [strmPath, setStrmPath] = useState("/srv/streamarr/strm");

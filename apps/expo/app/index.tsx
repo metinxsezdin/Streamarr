@@ -3,7 +3,7 @@ import { ActivityIndicator, View } from "react-native";
 
 import { useAuth } from "@/providers/AuthProvider";
 
-export default function Index(): JSX.Element {
+export default function Index() {
   const { status } = useAuth();
 
   if (status === "loading") {

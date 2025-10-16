@@ -7,7 +7,7 @@ function onAppStateChange(status: string) {
   focusManager.setFocused(status === "active");
 }
 
-export function QueryProvider({ children }: PropsWithChildren): JSX.Element {
+export function QueryProvider({ children }: PropsWithChildren) {
   const [client] = useState(
     () =>
       new QueryClient({

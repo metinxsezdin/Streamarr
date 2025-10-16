@@ -16,7 +16,7 @@ import { createApiClient } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import type { SetupResponse } from "@/types/api";
 
-export default function SetupScreen(): JSX.Element {
+export default function SetupScreen() {
   const router = useRouter();
   const { completeSetup, lastBackendUrl } = useAuth();
 
