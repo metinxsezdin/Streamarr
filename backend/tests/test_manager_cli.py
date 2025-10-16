@@ -192,6 +192,29 @@ def test_cli_jobs_list_outputs_recent_jobs(runner: CliRunner, cli_client: TestCl
     assert "\"status\": \"completed\"" in result.output
 
 
+def test_cli_jobs_list_supports_filters(runner: CliRunner, cli_client: TestClient) -> None:
+    """jobs list should forward status and type filters to the API."""
+
+    cli_client.post("/jobs/run", json={"type": "collect"})
+    cli_client.post("/jobs/run", json={"type": "catalog"})
+
+    result = runner.invoke(
+        cli_app,
+        [
+            "jobs",
+            "list",
+            "--status",
+            "completed",
+            "--type",
+            "collect",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "\"type\": \"collect\"" in result.output
+    assert "\"type\": \"catalog\"" not in result.output
+
+
 def test_cli_library_list_outputs_metadata(
     runner: CliRunner, cli_client: TestClient
 ) -> None:

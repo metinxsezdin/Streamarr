@@ -35,10 +35,26 @@ class JobStore:
             session.refresh(record)
             return _to_model(record)
 
-    def list(self, *, limit: int = 50) -> list[JobModel]:
-        """Return the most recent jobs up to the requested limit."""
+    def list(
+        self,
+        *,
+        limit: int = 50,
+        statuses: list[str] | None = None,
+        job_type: str | None = None,
+    ) -> list[JobModel]:
+        """Return the most recent jobs up to the requested limit with optional filters."""
 
-        statement = select(JobRecord).order_by(JobRecord.created_at.desc()).limit(limit)
+        statement = select(JobRecord)
+
+        if statuses:
+            normalized_statuses = sorted({status.lower() for status in statuses if status})
+            if normalized_statuses:
+                statement = statement.where(JobRecord.status.in_(normalized_statuses))
+
+        if job_type:
+            statement = statement.where(JobRecord.type == job_type)
+
+        statement = statement.order_by(JobRecord.created_at.desc()).limit(limit)
         with Session(self._engine) as session:
             records: Iterable[JobRecord] = session.exec(statement)
             return [_to_model(record) for record in records]

@@ -1,4 +1,6 @@
 """Job orchestration endpoints."""
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..dependencies import get_job_store
@@ -20,11 +22,26 @@ def run_job(request: JobRunRequest, store: JobStore = Depends(get_job_store)) ->
 @router.get("", response_model=list[JobModel])
 def list_jobs(
     limit: int = Query(default=50, ge=1, le=100),
+    statuses: Annotated[
+        list[str] | None,
+        Query(
+            alias="status",
+            description=(
+                "Filter results to one or more job statuses. Repeat the query parameter "
+                "to include multiple statuses."
+            ),
+        ),
+    ] = None,
+    job_type: str | None = Query(
+        default=None,
+        alias="type",
+        description="Filter results to a specific job type.",
+    ),
     store: JobStore = Depends(get_job_store),
 ) -> list[JobModel]:
     """Return the most recent jobs up to the requested limit."""
 
-    return store.list(limit=limit)
+    return store.list(limit=limit, statuses=statuses, job_type=job_type)
 
 
 @router.get("/{job_id}", response_model=JobModel)

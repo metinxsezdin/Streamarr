@@ -112,6 +112,38 @@ def test_jobs_detail_returns_404_for_missing_job(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+def test_jobs_list_supports_status_and_type_filters(client: TestClient) -> None:
+    """GET /jobs should honor optional status and type filters."""
+
+    app_state = client.app.state.app_state
+    job_store = app_state.job_store
+
+    completed = job_store.enqueue("collect")
+    job_store.mark_running(completed.id)
+    job_store.mark_completed(completed.id)
+
+    failed = job_store.enqueue("collect")
+    job_store.mark_failed(failed.id, error_message="pipeline failed", progress=0.5)
+
+    queued = job_store.enqueue("catalog")
+
+    status_response = client.get(
+        "/jobs",
+        params=[("status", "completed"), ("status", "failed"), ("limit", "10")],
+    )
+    assert status_response.status_code == 200
+    status_payload = [JobModel.model_validate(item) for item in status_response.json()]
+    assert {job.status for job in status_payload} == {"completed", "failed"}
+    assert all(job.id != queued.id for job in status_payload)
+
+    type_response = client.get("/jobs", params={"type": "collect", "limit": 10})
+    assert type_response.status_code == 200
+    type_payload = [JobModel.model_validate(item) for item in type_response.json()]
+    assert {job.type for job in type_payload} == {"collect"}
+    assert any(job.id == failed.id for job in type_payload)
+    assert all(job.id != queued.id for job in type_payload)
+
+
 def test_library_list_and_detail_round_trip(client: TestClient) -> None:
     """Library endpoints should expose paginated catalog metadata."""
 

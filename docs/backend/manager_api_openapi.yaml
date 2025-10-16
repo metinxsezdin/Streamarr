@@ -76,6 +76,25 @@ paths:
             maximum: 100
             default: 50
           description: Number of recent jobs to return.
+        - in: query
+          name: status
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - queued
+                - running
+                - completed
+                - failed
+          style: form
+          explode: true
+          description: Filter results to one or more job statuses.
+        - in: query
+          name: type
+          schema:
+            type: string
+          description: Filter results to a specific job type.
       responses:
         '200':
           description: Recent job list.

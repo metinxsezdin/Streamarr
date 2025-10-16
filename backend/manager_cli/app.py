@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 import typer
 
@@ -20,6 +20,9 @@ library_app = typer.Typer(help="Browse resolver library metadata.")
 app.add_typer(library_app, name="library")
 resolver_app = typer.Typer(help="Interact with the resolver service via the manager API.")
 app.add_typer(resolver_app, name="resolver")
+
+
+JOB_STATUS_CHOICES = {"queued", "running", "completed", "failed"}
 
 
 def _api_base_option() -> typer.Option:
@@ -128,12 +131,39 @@ def run_job(
 @jobs_app.command("list")
 def list_jobs(
     limit: int = typer.Option(10, min=1, max=100, help="Number of recent jobs to display."),
+    statuses: Optional[List[str]] = typer.Option(
+        None,
+        "--status",
+        help="Filter results to specific job statuses (repeat the flag).",
+    ),
+    job_type: Optional[str] = typer.Option(
+        None,
+        "--type",
+        help="Filter results to a specific job type.",
+    ),
     api_base: str = _api_base_option(),
 ) -> None:
     """Display recent jobs stored by the manager."""
 
+    params: dict[str, object] = {"limit": limit}
+    if statuses:
+        normalized_statuses: list[str] = []
+        for status in statuses:
+            value = status.lower()
+            if value not in JOB_STATUS_CHOICES:
+                typer.echo(
+                    "Invalid status value. Allowed values: "
+                    + ", ".join(sorted(JOB_STATUS_CHOICES)),
+                    err=True,
+                )
+                raise typer.Exit(code=1)
+            normalized_statuses.append(value)
+        params["status"] = normalized_statuses
+    if job_type:
+        params["type"] = job_type
+
     with create_client(api_base) as client:
-        response = client.get("/jobs", params={"limit": limit})
+        response = client.get("/jobs", params=params)
         response.raise_for_status()
         typer.echo(json.dumps(response.json(), indent=2, ensure_ascii=False))
 
