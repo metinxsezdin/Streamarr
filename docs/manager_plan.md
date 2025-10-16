@@ -1,13 +1,14 @@
 # Streamarr Manager (Expo) Plan
 
 ## Overview
-Create a cross-platform control panel for Streamarr using Expo (React Native) for the frontend and a FastAPI-based backend (existing resolver + new management endpoints). The Manager will allow users to configure Streamarr, run data pipelines, observe library status, and operate the resolver from a user-friendly interface.
+Create a cross-platform control panel and media player for Streamarr using Expo (React Native) for the frontend and a FastAPI-based backend (existing resolver + new management endpoints). The Manager will allow users to configure Streamarr, run data pipelines, observe library status, operate the resolver from a user-friendly interface, and stream media content directly through a built-in video player.
 
 ## Goals
 - Reduce manual CLI workflow to guided UI flows.
 - Provide visibility into link collection, catalog builds, STRM exports, and resolver performance.
 - Make onboarding simple: first-run wizard collects required config and optionally runs the full pipeline.
 - Support mobile (iOS/Android) and web clients using a single Expo codebase.
+- Enable direct media streaming through built-in video player without external applications.
 
 ## Success Metrics
 - First-run wizard completes full configuration (resolver host, TMDB key, STRM paths) in under 10 minutes without CLI intervention.
@@ -23,6 +24,7 @@ Create a cross-platform control panel for Streamarr using Expo (React Native) fo
 - Navigation: `expo-router` or `react-navigation` with tab navigation (Dashboard, Library, Jobs, Settings, Logs).
 - State/data: React Query + Zustand (or Recoil) for API queries and local store.
 - UI components: Expo Router screens with styling (Tailwind + `nativewind`, or Chakra UI for RN).
+- Media playback: `expo-av` for video streaming with full-screen controls and quality selection.
 - Build: EAS build for mobile, `expo export --platform web` for web dashboard.
 
 ### Backend
@@ -114,8 +116,9 @@ Create a cross-platform control panel for Streamarr using Expo (React Native) fo
 - Item cards display poster/backdrop (if available), sources, and fallback order.
 - Detail view modal:
   - Full metadata (overview, year, TMDB ID).
-  - Buttons: “Test playback” (hit `/play/<id>?format=json`), “Regenerate STRM”, “Edit metadata (future)”.
+  - Buttons: "Play" (stream directly in app), "Test playback" (hit `/play/<id>?format=json`), "Regenerate STRM", "Edit metadata (future)".
 - Integration with resolver to show current best variant chosen (eg. 1080p stream).
+- Full-screen video player with quality selection and playback controls.
 
 ### 4. Jobs
 - Filter by status (running/completed/failed).
@@ -279,6 +282,10 @@ Create a cross-platform control panel for Streamarr using Expo (React Native) fo
    - [x] Search/filter (site, year, metadata presence).
    - [x] Job detail view with WebSocket log streaming, cancel button.
    - [x] "Test playback" action hitting `/play/<id>?format=json` to confirm resolver path.
+   - [ ] **Media Player Integration**: Add expo-av dependency and implement full-screen video player.
+   - [ ] **Stream Resolution**: Integrate with resolver to get direct stream URLs for playback.
+   - [ ] **Quality Selection**: Allow users to choose between available stream qualities.
+   - [ ] **Playback Controls**: Implement play/pause, seek, volume, and full-screen controls.
 5. **Phase 4**: Scheduler & notifications
    - UI for cron-like schedules.
    - Optional push notification integration.

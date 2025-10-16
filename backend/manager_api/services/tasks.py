@@ -51,6 +51,8 @@ def execute_manager_job(
         # Execute specific job type
         if job_type == "bootstrap":
             _execute_bootstrap_job(job_id, log_store, resolved_settings)
+        elif job_type == "strm_regenerate":
+            _execute_strm_regenerate_job(job_id, log_store, resolved_settings, payload)
         else:
             log_store.append(
                 job_id,
@@ -76,6 +78,68 @@ def execute_manager_job(
         raise
     finally:
         engine.dispose()
+
+
+def _execute_strm_regenerate_job(job_id: str, log_store: JobLogStore, settings: ManagerSettings, payload: dict | None) -> None:
+    """Execute STRM regenerate job: create .strm file for a library item."""
+    
+    if not payload or "library_item_id" not in payload:
+        log_store.append(
+            job_id,
+            JobLogCreate(
+                level="error",
+                message="Missing library_item_id in payload",
+                context={"payload": payload},
+            ),
+        )
+        return
+    
+    library_item_id = payload["library_item_id"]
+    log_store.append(
+        job_id,
+        JobLogCreate(
+            level="info",
+            message=f"Regenerating STRM for library item: {library_item_id}",
+            context={"library_item_id": library_item_id},
+        ),
+    )
+    
+    # Get library item
+    engine = create_engine_from_settings(settings)
+    library_store = LibraryStore(engine)
+    library_item = library_store.get(library_item_id)
+    
+    if not library_item:
+        log_store.append(
+            job_id,
+            JobLogCreate(
+                level="error",
+                message=f"Library item not found: {library_item_id}",
+                context={"library_item_id": library_item_id},
+            ),
+        )
+        return
+    
+    # Create STRM file
+    from pathlib import Path
+    from ..utils.paths import ensure_strm_directory
+    
+    strm_filename = f"{library_item.title}.strm"
+    strm_dir = ensure_strm_directory(settings.default_strm_output_path)
+    strm_path = Path(strm_dir) / strm_filename
+    
+    # Write STRM file with the URL
+    with open(strm_path, "w", encoding="utf-8") as f:
+        f.write(library_item.url)
+    
+    log_store.append(
+        job_id,
+        JobLogCreate(
+            level="info",
+            message=f"STRM file created: {strm_path}",
+            context={"strm_path": str(strm_path), "url": library_item.url},
+        ),
+    )
 
 
 def _execute_bootstrap_job(job_id: str, log_store: JobLogStore, settings: ManagerSettings) -> None:
@@ -116,13 +180,26 @@ def _execute_bootstrap_job(job_id: str, log_store: JobLogStore, settings: Manage
                 url = item.get("url", "")
                 item_id = item.get("id", "")
                 
-                # Create library item
+                # Create library item with variants from sources
+                metadata = item.copy()
+                if "sources" in metadata:
+                    # Convert sources to variants format
+                    variants = []
+                    for source in metadata["sources"]:
+                        variant = {
+                            "source": source.get("site", "unknown"),
+                            "quality": source.get("quality", "unknown"),
+                            "url": source.get("url", "")
+                        }
+                        variants.append(variant)
+                    metadata["sources"] = variants
+                
                 library_item = library_store.create(
                     title=title,
                     site=site,
                     url=url,
                     external_id=item_id,
-                    metadata=item
+                    metadata=metadata
                 )
                 
                 if library_item:

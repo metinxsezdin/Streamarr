@@ -211,6 +211,7 @@ def _to_model(record: LibraryItemRecord) -> LibraryItemModel:
         title=record.title,
         item_type=record.item_type,
         site=record.site,
+        url=record.url,
         year=record.year,
         tmdb_id=record.tmdb_id,
         variants=variants,

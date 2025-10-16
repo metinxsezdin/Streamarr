@@ -197,6 +197,7 @@ class LibraryItemModel(BaseModel):
     title: str
     item_type: Literal["movie", "episode"]
     site: str
+    url: str
     year: int | None = None
     tmdb_id: str | None = None
     variants: list[StreamVariantModel] = Field(default_factory=list)

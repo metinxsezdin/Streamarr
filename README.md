@@ -4,7 +4,7 @@
 
 </div>
 
-Streamarr harvests stream URLs from popular Turkish streaming sites, exposes them through a resolver API, and integrates with Jellyfin via STRM libraries and a native plugin.
+Streamarr harvests stream URLs from popular Turkish streaming sites, exposes them through a resolver API, integrates with Jellyfin via STRM libraries and a native plugin, and provides a mobile media player app for direct streaming.
 
 ---
 
@@ -14,6 +14,8 @@ Streamarr harvests stream URLs from popular Turkish streaming sites, exposes the
 - **Dizibox & HDFilm Support** – Automation for the two most-requested Turkish streaming sources
 - **On-Demand Resolution** – Stream URLs are refreshed only when a user presses play
 - **Jellyfin Plugin** – Adds a configuration UI and /play/<id> integration
+- **Mobile Media Player** – Native Expo app with built-in video player for direct streaming
+- **Manager Backend** – FastAPI + Redis Queue for job management and library synchronization
 - **CLI Utilities** – Collect links, build catalogs, generate STRM files, update plugin manifest
 - **Docker Support** – Run the resolver API in a container with a single command
 
@@ -23,7 +25,10 @@ Streamarr harvests stream URLs from popular Turkish streaming sites, exposes the
 
 | Path | Purpose |
 |------|---------|
-| ackend/resolver/ | Playwright scrapers & Flask resolver API |
+| backend/resolver/ | Playwright scrapers & Flask resolver API |
+| backend/manager_api/ | FastAPI backend with Redis Queue for job management |
+| backend/manager_worker/ | RQ worker for background job processing |
+| apps/expo/ | React Native mobile app with media player functionality |
 | scripts/ | CLI utilities (collect_links, catalog_builder, strm_generator, update_manifest) |
 | plugins/Streamarr/ | Jellyfin plugin source (config page, metadata providers, build output) |
 | data/ | Harvested link lists and generated catalog |
@@ -35,9 +40,55 @@ Streamarr harvests stream URLs from popular Turkish streaming sites, exposes the
 ## Requirements
 
 - **Python** 3.11+
+- **Node.js** 20 LTS (for Expo app)
 - **Playwright** (pip install -r requirements.txt and playwright install firefox)
 - **.NET SDK** 8.0 (for Jellyfin plugin builds)
 - **Optional** TMDB API key (TMDB_KEY) for metadata enrichment
+
+---
+
+## Mobile Media Player App (Expo)
+
+The Streamarr mobile app provides a native media player experience for streaming content directly from Turkish streaming sites.
+
+### Features
+
+- **Library Management** – Browse and search through your media catalog
+- **Built-in Video Player** – Stream content directly without external players
+- **STRM Generation** – Create .strm files for Jellyfin integration
+- **Real-time Job Monitoring** – Track bootstrap and STRM generation progress
+- **Cross-platform** – Works on iOS, Android, and Web
+
+### Quick Start
+
+1. **Install dependencies**
+   ```bash
+   cd apps/expo
+   npm install
+   ```
+
+2. **Start the development server**
+   ```bash
+   npx expo start
+   ```
+
+3. **Configure backend connection**
+   - Enter your Manager API URL (default: http://127.0.0.1:8000)
+   - Complete initial setup with resolver configuration
+
+4. **Start streaming**
+   - Browse your library
+   - Tap on any media item to view details
+   - Use "Test et" to stream directly in the app
+   - Generate STRM files for Jellyfin integration
+
+### Development
+
+The Expo app uses:
+- **React Native** with Expo SDK 54
+- **React Query** for API state management
+- **Expo AV** for media playback (planned)
+- **TypeScript** for type safety
 
 ---
 
@@ -262,6 +313,8 @@ dotnet build plugins/Streamarr/StreamarrPlugin.csproj -c Release
 - **Checksum mismatch in Jellyfin** – Re-run scripts/update_manifest.py after re-packaging a ZIP
 - **Plugin settings invisible** – Rebuild the plugin after updating configPage.html (assets are embedded)
 - **Docker resolver not starting** – Run docker compose logs resolver for details
+- **Expo app connection issues** – Ensure Manager API is running on http://127.0.0.1:8000
+- **Media playback not working** – Check that expo-av is installed and properly configured
 
 ---
 

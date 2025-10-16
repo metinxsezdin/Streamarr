@@ -5,6 +5,7 @@ import {
   Alert,
   FlatList,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -13,7 +14,16 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Dimensions,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  interpolate,
+  Extrapolate,
+} from "react-native-reanimated";
 
 import { useDebouncedValue } from "@/lib/hooks";
 import { useAuth } from "@/providers/AuthProvider";
@@ -28,6 +38,7 @@ import type {
 } from "@/types/api";
 
 const PAGE_SIZE = 25;
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 const SORT_OPTIONS: { value: LibrarySortOption; label: string }[] = [
   { value: "updated_desc", label: "Güncel ↓" },
   { value: "updated_asc", label: "Güncel ↑" },
@@ -41,6 +52,46 @@ interface FilterChipProps {
   label: string;
   selected?: boolean;
   onPress: () => void;
+}
+
+// Hero Section Component
+function HeroSection({ featuredItems }: { featuredItems: LibraryItemModel[] }) {
+  const scrollX = useSharedValue(0);
+  
+  if (featuredItems.length === 0) return null;
+
+  const heroItem = featuredItems[0]; // İlk öğeyi hero olarak kullan
+
+  return (
+    <View style={styles.heroContainer}>
+      <Animated.View style={[styles.heroCard, styles.floatingCard]}>
+        <View style={styles.heroPoster}>
+          <View style={styles.heroPosterPlaceholder}>
+            <Text style={styles.heroPosterText}>{heroItem.title.charAt(0)}</Text>
+          </View>
+          <View style={styles.heroOverlay}>
+            <View style={styles.heroBadge}>
+              <Text style={styles.heroBadgeText}>ÖNE ÇIKAN</Text>
+            </View>
+            <View style={styles.heroPlayButton}>
+              <Text style={styles.heroPlayText}>▶</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.heroInfo}>
+          <Text style={styles.heroTitle} numberOfLines={2}>
+            {heroItem.title}
+          </Text>
+          <Text style={styles.heroMeta}>
+            {heroItem.year ?? "Yıl yok"} · {heroItem.site}
+          </Text>
+          <Text style={styles.heroDescription}>
+            {heroItem.variants.length} farklı kalitede kaynak mevcut
+          </Text>
+        </View>
+      </Animated.View>
+    </View>
+  );
 }
 
 function FilterChip({ label, selected, onPress }: FilterChipProps) {
@@ -58,32 +109,72 @@ function FilterChip({ label, selected, onPress }: FilterChipProps) {
 
 function SkeletonCard() {
   return (
-    <View style={styles.skeletonCard}>
-      <View style={styles.skeletonTitle} />
-      <View style={styles.skeletonLine} />
-      <View style={styles.skeletonLine} />
-      <View style={styles.skeletonLineShort} />
+    <View style={styles.skeletonPosterCard}>
+      <View style={styles.skeletonPoster} />
+      <View style={styles.skeletonPosterInfo}>
+        <View style={styles.skeletonLine} />
+        <View style={styles.skeletonLineShort} />
+      </View>
     </View>
   );
 }
 
 function LibraryItemCard({ item, onPress }: { item: LibraryItemModel; onPress: () => void }) {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+      opacity: opacity.value,
+    };
+  });
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.95);
+    opacity.value = withTiming(0.8, { duration: 150 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1);
+    opacity.value = withTiming(1, { duration: 150 });
+  };
+
   return (
-    <Pressable onPress={onPress} style={styles.itemCard}>
-      <View style={styles.itemHeader}>
-        <Text style={styles.itemTitle}>{item.title}</Text>
-        <Text style={styles.itemBadge}>{item.item_type.toUpperCase()}</Text>
-      </View>
-      <Text style={styles.itemMeta}>
-        {item.site} · {item.year ?? "Yıl yok"}
-      </Text>
-      {item.tmdb_id ? (
-        <Text style={styles.itemMeta}>TMDB: {item.tmdb_id}</Text>
-      ) : (
-        <Text style={styles.itemMeta}>TMDB eşleşmesi yok</Text>
-      )}
-      <Text style={styles.itemMeta}>Kaynaklar: {item.variants.length}</Text>
-    </Pressable>
+    <Animated.View style={[styles.posterCard, styles.floatingCard, animatedStyle]}>
+      <Pressable 
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={styles.posterPressable}
+      >
+        <View style={styles.posterContainer}>
+          {/* Placeholder for poster image - can be replaced with actual poster URL later */}
+          <View style={styles.posterPlaceholder}>
+            <Text style={styles.posterPlaceholderText}>{item.title.charAt(0)}</Text>
+          </View>
+          <View style={styles.posterOverlay}>
+            <Text style={styles.posterBadge}>{item.item_type.toUpperCase()}</Text>
+            {item.variants.length > 0 && (
+              <View style={styles.playButton}>
+                <Text style={styles.playButtonText}>▶</Text>
+              </View>
+            )}
+          </View>
+        </View>
+        <View style={styles.posterInfo}>
+          <Text style={styles.posterTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+          <Text style={styles.posterMeta}>
+            {item.year ?? "Yıl yok"} · {item.site}
+          </Text>
+          {item.variants.length > 0 && (
+            <Text style={styles.posterSources}>{item.variants.length} kaynak</Text>
+          )}
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -114,10 +205,28 @@ function LibraryDetailModal({ itemId, onClose }: LibraryDetailModalProps) {
       });
     },
     onSuccess: (job) => {
-      Alert.alert("İş kuyruğa eklendi", `Job ID: ${job.id}`);
+      // Start polling for job completion
+      const pollJobStatus = async () => {
+        try {
+          const jobStatus = await session!.client.get<JobModel>(`/jobs/${job.id}`);
+          if (jobStatus.status === "completed") {
+            Alert.alert("STRM Oluşturuldu", "STRM dosyası başarıyla oluşturuldu!");
+          } else if (jobStatus.status === "failed") {
+            Alert.alert("STRM Oluşturulamadı", "STRM dosyası oluşturulurken hata oluştu.");
+          } else if (jobStatus.status === "running" || jobStatus.status === "queued") {
+            // Continue polling
+            setTimeout(pollJobStatus, 2000);
+          }
+        } catch (error) {
+          console.error("Job status polling error:", error);
+        }
+      };
+      
+      Alert.alert("İş Başlatıldı", "STRM dosyası oluşturuluyor...");
+      setTimeout(pollJobStatus, 2000);
     },
     onError: () => {
-      Alert.alert("İş başarısız", "STRM yeniden oluşturma isteği gönderilemedi.");
+      Alert.alert("İş Başarısız", "STRM yeniden oluşturma isteği gönderilemedi.");
     },
   });
 
@@ -127,9 +236,11 @@ function LibraryDetailModal({ itemId, onClose }: LibraryDetailModalProps) {
         throw new Error("Session missing");
       }
 
+      console.log("Testing playback for URL:", variant.url);
       return session.client.get<unknown>(variant.url);
     },
     onSuccess: (data) => {
+      console.log("Playback response:", data);
       if (data === undefined || data === null) {
         Alert.alert("Playback tamamlandı", "Sunucudan yanıt alınmadı ancak istek başarıyla gönderildi.");
         return;
@@ -138,8 +249,10 @@ function LibraryDetailModal({ itemId, onClose }: LibraryDetailModalProps) {
       const normalized = typeof data === "string" ? data : JSON.stringify(data, null, 2);
       Alert.alert("Playback başarılı", normalized);
     },
-    onError: () => {
-      Alert.alert("Playback başarısız", "Akış testi tamamlanamadı.");
+    onError: (error) => {
+      console.error("Playback error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Bilinmeyen hata";
+      Alert.alert("Playback başarısız", `Akış testi tamamlanamadı: ${errorMessage}`);
     },
   });
 
@@ -153,10 +266,13 @@ function LibraryDetailModal({ itemId, onClose }: LibraryDetailModalProps) {
 
   const handleTestPlayback = useCallback(
     (variant: StreamVariantModel) => {
+      console.log("Test playback button clicked for variant:", variant);
       if (playbackMutation.isPending) {
+        console.log("Playback mutation is already pending, ignoring click");
         return;
       }
 
+      console.log("Starting playback mutation...");
       playbackMutation.mutate(variant);
     },
     [playbackMutation],
@@ -334,6 +450,14 @@ export default function LibraryScreen() {
   const isInitialLoading = libraryQuery.isLoading && !libraryQuery.data;
   const refreshing = libraryQuery.isRefetching && !libraryQuery.isFetchingNextPage;
 
+  // Responsive grid columns
+  const numColumns = useMemo(() => {
+    if (Platform.OS === 'web') {
+      return 10; // Web'de 10 sütun
+    }
+    return 2; // Mobile'da 2 sütun
+  }, []);
+
   const toggleSite = useCallback(
     (site: string) => {
       setSelectedSites((current) => {
@@ -356,8 +480,23 @@ export default function LibraryScreen() {
     setSort("updated_desc");
   }, []);
 
+  // Featured items for hero section
+  const featuredItems = useMemo(() => {
+    return items.slice(0, 3); // İlk 3 öğeyi featured olarak kullan
+  }, [items]);
+
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Kütüphane</Text>
+        <Text style={styles.subtitle}>
+          {metricsQuery.data?.total ?? 0} öğe · {Object.keys(metricsQuery.data?.site_counts ?? {}).length} site
+        </Text>
+      </View>
+
+      {/* Hero Section */}
+      <HeroSection featuredItems={featuredItems} />
+
       {libraryQuery.error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Kütüphane yüklenemedi.</Text>
@@ -375,8 +514,10 @@ export default function LibraryScreen() {
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={styles.gridContent}
         style={styles.list}
+        numColumns={numColumns}
+        columnWrapperStyle={numColumns > 1 ? styles.gridRow : undefined}
         renderItem={({ item }) => (
           <LibraryItemCard
             item={item}
@@ -531,7 +672,7 @@ export default function LibraryScreen() {
         ListEmptyComponent={
           isInitialLoading ? (
             <View style={styles.emptyState}>
-              {[...Array(3)].map((_, index) => (
+              {[...Array(Platform.OS === 'web' ? 30 : 6)].map((_, index) => (
                 <SkeletonCard key={`skeleton-${index}`} />
               ))}
             </View>
@@ -565,6 +706,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0f172a",
   },
+  header: {
+    paddingHorizontal: Platform.OS === 'web' ? 24 : 16,
+    paddingTop: 20,
+    paddingBottom: 10,
+    gap: 6,
+  },
+  title: {
+    color: "#f8fafc",
+    fontSize: Platform.OS === 'web' ? 32 : 28,
+    fontWeight: "700",
+    textAlign: Platform.OS === 'web' ? 'center' : 'left',
+  },
+  subtitle: {
+    color: "#94a3b8",
+    fontSize: Platform.OS === 'web' ? 16 : 14,
+    textAlign: Platform.OS === 'web' ? 'center' : 'left',
+  },
   list: {
     flex: 1,
   },
@@ -573,34 +731,87 @@ const styles = StyleSheet.create({
     gap: 16,
     paddingBottom: 80,
   },
-  itemCard: {
-    backgroundColor: "#1e293b",
-    borderRadius: 16,
-    padding: 20,
-    gap: 6,
+  gridContent: {
+    padding: Platform.OS === 'web' ? 24 : 16,
+    paddingBottom: 80,
   },
-  itemHeader: {
-    flexDirection: "row",
+  gridRow: {
     justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  posterCard: {
+    flex: 1,
+    marginHorizontal: 2,
+    maxWidth: Platform.OS === 'web' ? "9.6%" : "48%", // Web'de 10 sütun, mobile'da 2 sütun
+  },
+  posterContainer: {
+    position: "relative",
+    aspectRatio: Platform.OS === 'web' ? 2/3 : 2/3, // Web'de kompakt posterler
+    borderRadius: 8,
+    overflow: "hidden",
+    marginBottom: 6,
+  },
+  posterPlaceholder: {
+    flex: 1,
+    backgroundColor: "#1e293b",
+    justifyContent: "center",
     alignItems: "center",
   },
-  itemTitle: {
-    color: "#f8fafc",
-    fontSize: 18,
+  posterPlaceholderText: {
+    color: "#60a5fa",
+    fontSize: 32,
     fontWeight: "700",
   },
-  itemBadge: {
+  posterOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "space-between",
+    padding: 8,
+  },
+  posterBadge: {
     color: "#0f172a",
     backgroundColor: "#60a5fa",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    overflow: "hidden",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    fontSize: 10,
     fontWeight: "600",
+    alignSelf: "flex-start",
   },
-  itemMeta: {
+  playButton: {
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    borderRadius: Platform.OS === 'web' ? 15 : 20,
+    width: Platform.OS === 'web' ? 30 : 40,
+    height: Platform.OS === 'web' ? 30 : 40,
+    justifyContent: "center",
+    alignItems: "center",
+    alignSelf: "flex-end",
+  },
+  playButtonText: {
+    color: "#f8fafc",
+    fontSize: Platform.OS === 'web' ? 12 : 16,
+    marginLeft: 2,
+  },
+  posterInfo: {
+    gap: 4,
+  },
+  posterTitle: {
+    color: "#f8fafc",
+    fontSize: Platform.OS === 'web' ? 12 : 14,
+    fontWeight: "600",
+    lineHeight: Platform.OS === 'web' ? 14 : 18,
+  },
+  posterMeta: {
     color: "#94a3b8",
-    fontSize: 14,
+    fontSize: Platform.OS === 'web' ? 10 : 12,
+  },
+  posterSources: {
+    color: "#60a5fa",
+    fontSize: Platform.OS === 'web' ? 9 : 11,
+    fontWeight: "500",
   },
   filtersContainer: {
     gap: 16,
@@ -676,9 +887,10 @@ const styles = StyleSheet.create({
     color: "#f8fafc",
   },
   emptyState: {
-    gap: 16,
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
     paddingVertical: 40,
   },
   emptyText: {
@@ -692,6 +904,20 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     gap: 12,
+  },
+  skeletonPosterCard: {
+    flex: 1,
+    marginHorizontal: 2,
+    maxWidth: Platform.OS === 'web' ? "9.6%" : "48%",
+  },
+  skeletonPoster: {
+    aspectRatio: Platform.OS === 'web' ? 2/3 : 2/3,
+    backgroundColor: "#273548",
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  skeletonPosterInfo: {
+    gap: 6,
   },
   skeletonTitle: {
     height: 18,
@@ -814,5 +1040,104 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#f87171",
     fontSize: 16,
+  },
+  // Hero Section Styles
+  heroContainer: {
+    paddingHorizontal: Platform.OS === 'web' ? 24 : 16,
+    paddingVertical: 20,
+  },
+  heroCard: {
+    backgroundColor: "#1e293b",
+    borderRadius: 20,
+    padding: 20,
+    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    alignItems: 'center',
+    gap: 20,
+  },
+  heroPoster: {
+    position: "relative",
+    aspectRatio: 2/3,
+    width: Platform.OS === 'web' ? 200 : 150,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  heroPosterPlaceholder: {
+    flex: 1,
+    backgroundColor: "#334155",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroPosterText: {
+    color: "#f8fafc",
+    fontSize: 48,
+    fontWeight: "700",
+  },
+  heroOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "space-between",
+    padding: 12,
+  },
+  heroBadge: {
+    backgroundColor: "rgba(96, 165, 250, 0.9)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+  },
+  heroBadgeText: {
+    color: "#0f172a",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  heroPlayButton: {
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    borderRadius: 30,
+    width: 60,
+    height: 60,
+    justifyContent: "center",
+    alignItems: "center",
+    alignSelf: "flex-end",
+  },
+  heroPlayText: {
+    color: "#f8fafc",
+    fontSize: 24,
+    marginLeft: 4,
+  },
+  heroInfo: {
+    flex: 1,
+    gap: 12,
+  },
+  heroTitle: {
+    color: "#f8fafc",
+    fontSize: Platform.OS === 'web' ? 28 : 24,
+    fontWeight: "700",
+    lineHeight: Platform.OS === 'web' ? 34 : 30,
+  },
+  heroMeta: {
+    color: "#94a3b8",
+    fontSize: Platform.OS === 'web' ? 16 : 14,
+  },
+  heroDescription: {
+    color: "#cbd5e1",
+    fontSize: Platform.OS === 'web' ? 14 : 12,
+    lineHeight: Platform.OS === 'web' ? 20 : 16,
+  },
+  // Floating Card Effect
+  floatingCard: {
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  posterPressable: {
+    flex: 1,
   },
 });
