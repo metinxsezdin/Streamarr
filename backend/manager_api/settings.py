@@ -4,6 +4,8 @@ from __future__ import annotations
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .utils.paths import default_strm_output_path
+
 
 class ManagerSettings(BaseSettings):
     """Environment-aware settings for the Manager API service."""
@@ -12,7 +14,8 @@ class ManagerSettings(BaseSettings):
         "http://localhost:5055", description="Base URL for the existing resolver service."
     )
     default_strm_output_path: str = Field(
-        "./data/strm", description="Filesystem path where STRM exports are written by default."
+        default_factory=default_strm_output_path,
+        description="Filesystem path where STRM exports are written by default.",
     )
     default_tmdb_api_key: str | None = Field(
         default=None, description="Optional TMDB API key used for metadata enrichment."

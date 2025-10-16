@@ -22,7 +22,7 @@ export default function SetupScreen() {
 
   const [baseUrl, setBaseUrl] = useState(lastBackendUrl ?? "http://localhost:8000");
   const [resolverUrl, setResolverUrl] = useState("http://localhost:5055");
-  const [strmPath, setStrmPath] = useState("/srv/streamarr/strm");
+  const [strmPath, setStrmPath] = useState("");
   const [tmdbKey, setTmdbKey] = useState("");
   const [htmlTitleFetch, setHtmlTitleFetch] = useState(true);
   const [runInitialJob, setRunInitialJob] = useState(true);
@@ -42,9 +42,11 @@ export default function SetupScreen() {
 
     try {
       const client = createApiClient(trimmedBaseUrl, token.trim() || undefined);
+      const trimmedStrmPath = strmPath.trim();
+
       const payload = {
         resolver_url: resolverUrl.trim(),
-        strm_output_path: strmPath.trim(),
+        strm_output_path: trimmedStrmPath || undefined,
         tmdb_api_key: tmdbKey.trim() ? tmdbKey.trim() : null,
         html_title_fetch: htmlTitleFetch,
         run_initial_job: runInitialJob,
@@ -102,15 +104,18 @@ export default function SetupScreen() {
           style={styles.input}
         />
 
-        <Text style={[styles.label, styles.sectionSpacing]}>STRM Çıktı Dizini</Text>
+        <Text style={[styles.label, styles.sectionSpacing]}>STRM Çıktı Dizini (opsiyonel)</Text>
         <TextInput
           value={strmPath}
           onChangeText={setStrmPath}
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="/srv/streamarr/strm"
+          placeholder="Varsayılan klasörü kullanmak için boş bırakın"
           style={styles.input}
         />
+        <Text style={styles.helperText}>
+          Boş bırakırsanız yöneticinin varsayılan STRM klasörü seçilir.
+        </Text>
 
         <Text style={[styles.label, styles.sectionSpacing]}>TMDB API Anahtarı (opsiyonel)</Text>
         <TextInput

@@ -63,6 +63,9 @@ class ConfigUpdate(BaseModel):
 class SetupRequest(ConfigModel):
     """Payload accepted by the initial setup endpoint."""
 
+    strm_output_path: str | None = Field(
+        default=None, description="Optional STRM path override for initial setup."
+    )
     run_initial_job: bool = Field(
         default=False,
         description="Whether to trigger a bootstrap job after persisting configuration.",

@@ -462,20 +462,31 @@ components:
       required:
         - running
     SetupRequest:
-      allOf:
-        - $ref: '#/components/schemas/Config'
-        - type: object
-          properties:
-            run_initial_job:
-              type: boolean
-              default: false
-            initial_job_type:
-              type: string
-              default: bootstrap
-            initial_job_payload:
-              type: object
-              additionalProperties: true
-              nullable: true
+      type: object
+      properties:
+        resolver_url:
+          type: string
+        strm_output_path:
+          type: string
+          nullable: true
+          description: STRM export directory override. When omitted the service uses the platform default.
+        tmdb_api_key:
+          type: string
+          nullable: true
+        html_title_fetch:
+          type: boolean
+        run_initial_job:
+          type: boolean
+          default: false
+        initial_job_type:
+          type: string
+          default: bootstrap
+        initial_job_payload:
+          type: object
+          additionalProperties: true
+          nullable: true
+      required:
+        - resolver_url
     SetupResponse:
       type: object
       properties:

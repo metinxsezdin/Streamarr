@@ -5,7 +5,8 @@ export interface ConfigModel {
   html_title_fetch: boolean;
 }
 
-export interface SetupRequest extends ConfigModel {
+export interface SetupRequest extends Omit<ConfigModel, "strm_output_path"> {
+  strm_output_path?: string | null;
   run_initial_job: boolean;
   initial_job_type: string;
   initial_job_payload?: Record<string, unknown> | null;
