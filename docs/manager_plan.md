@@ -250,12 +250,21 @@ Create a cross-platform control panel for Streamarr using Expo (React Native) fo
    - Extend resolver config endpoints (start/stop, status).
    - Rework CLI entry-point to call new API (backward compatibility).
    - Deliverables: API docs (OpenAPI), CLI parity tests.
+   - **Sprint 1 checklist (kick-off)**:
+     1. ✅ Audit existing `backend/resolver` structure and document reusable modules for the FastAPI app (see `docs/backend/resolver_audit.md`).
+     2. ✅ Scaffold `backend/manager_api` package with application factory, settings module, and health/config endpoints.
+     3. ✅ Define Pydantic models for `Config`, `Job`, and `LibraryItem` aligned with the "Data & API Contracts" section.
+     4. ✅ Add SQLite migration for job + config tables using SQLModel or Alembic, including seed data for first-run defaults.
+     5. ✅ Draft OpenAPI-first spec (FastAPI routers) covering `/setup`, `/config`, `/jobs`, `/library`, and `/resolver` read-only endpoints.
+     6. ✅ Create CLI shim (Typer) that delegates to new endpoints to validate parity requirements.
+     7. ✅ Establish backend `Makefile`/`pnpm` scripts for `lint`, `test`, and `dev` commands; wire Ruff + pytest with placeholder tests.
+     8. ✅ Capture architecture/decisions in `docs/adr/` (ADR-0001: Manager API Foundation) once scaffolding lands.
 2. **Phase 1.5**: Queue transition & observability
-   - Provision Redis (or preferred broker) locally and in deployment environments, with clear setup docs.
-   - Migrate job orchestrator to RQ or Dramatiq and validate worker scaling behaviour.
-   - Update docker compose and infrastructure automation to include the queue service.
-   - Add queue health checks, metrics, and alerting hooks to surface failures early.
-   - Document migration steps for existing CLI users and background task backlog.
+   - ✅ Provision Redis (or preferred broker) locally and in deployment environments, with clear setup docs (`docker-compose` now ships a Redis service).
+   - ✅ Migrate job orchestrator to RQ or Dramatiq and validate worker scaling behaviour (see `backend/manager_api/services/queue.py`).
+   - ✅ Update docker compose and infrastructure automation to include the queue service.
+   - ✅ Add queue health checks, metrics, and alerting hooks to surface failures early (`/health` now reports queue status).
+   - ✅ Document migration steps for existing CLI users and background task backlog (`docs/backend/queue_migration.md`).
 3. **Phase 2**: Expo app foundation
    - Setup project, navigation, auth, basic dashboard.
    - First-run wizard: collect backend URL, TMDB key, resolver base.
