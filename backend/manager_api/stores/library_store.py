@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Any, Sequence
+from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.engine import Engine
@@ -109,6 +110,44 @@ class LibraryStore:
             record = session.get(LibraryItemRecord, item_id)
             return _to_model(record) if record else None
 
+    def create(
+        self,
+        *,
+        title: str,
+        site: str,
+        url: str,
+        external_id: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> LibraryItemModel | None:
+        """Create a new library item from catalog data."""
+
+        # Check if item already exists
+        with Session(self.engine) as session:
+            existing = session.exec(
+                select(LibraryItemRecord).where(LibraryItemRecord.external_id == external_id)
+            ).first()
+            
+            if existing:
+                return _to_model(existing)
+            
+            # Create new item
+            record = LibraryItemRecord(
+                id=uuid4().hex,
+                title=title,
+                site=site,
+                url=url,
+                external_id=external_id,
+                item_type=metadata.get("type", "movie") if metadata else "movie",
+                year=metadata.get("year") if metadata else None,
+                tmdb_id=metadata.get("tmdb_id") if metadata else None,
+                variants=[] if not metadata or not metadata.get("sources") else metadata.get("sources", []),
+            )
+            
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            return _to_model(record)
+
     def metrics(self) -> LibraryMetricsModel:
         """Return aggregate statistics for the catalog."""
 
@@ -157,7 +196,16 @@ class LibraryStore:
 def _to_model(record: LibraryItemRecord) -> LibraryItemModel:
     """Convert a library record into a response model."""
 
-    variants = [StreamVariantModel.model_validate(variant) for variant in record.variants or []]
+    variants = []
+    if record.variants:
+        for variant in record.variants:
+            if variant and isinstance(variant, dict):
+                try:
+                    variants.append(StreamVariantModel.model_validate(variant))
+                except Exception:
+                    # Skip invalid variants
+                    pass
+    
     return LibraryItemModel(
         id=record.id,
         title=record.title,

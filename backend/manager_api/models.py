@@ -64,6 +64,8 @@ class LibraryItemRecord(SQLModel, table=True):
     title: str = Field(index=True)
     item_type: str = Field(index=True)
     site: str = Field(index=True)
+    url: str = Field(default="")
+    external_id: str = Field(index=True)
     year: int | None = Field(default=None, index=True)
     tmdb_id: str | None = Field(default=None, index=True)
     variants: list[dict[str, Any]] = Field(
