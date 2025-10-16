@@ -10,7 +10,7 @@ export class ApiError extends Error {
   }
 }
 
-function joinUrl(baseUrl: string, path: string): string {
+export function resolveApiUrl(baseUrl: string, path: string): string {
   if (/^https?:/i.test(path)) {
     return path;
   }
@@ -40,7 +40,7 @@ async function request<T>(
   baseUrl: string,
   token: string | undefined,
   path: string,
-  init: RequestInit & { body?: unknown } = {},
+  init: (Omit<RequestInit, "body"> & { body?: unknown }) = {},
 ): Promise<T> {
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -57,7 +57,7 @@ async function request<T>(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(joinUrl(baseUrl, path), {
+  const response = await fetch(resolveApiUrl(baseUrl, path), {
     ...init,
     headers,
     body,
@@ -98,4 +98,17 @@ export function createApiClient(baseUrl: string, token?: string): ApiClient {
     put: (path, body, init) =>
       request(baseUrl, token, path, { ...init, method: "PUT", body }),
   };
+}
+
+export function resolveWebSocketUrl(baseUrl: string, path: string): string {
+  const httpUrl = resolveApiUrl(baseUrl, path);
+  if (httpUrl.startsWith("https://")) {
+    return `wss://${httpUrl.slice("https://".length)}`;
+  }
+
+  if (httpUrl.startsWith("http://")) {
+    return `ws://${httpUrl.slice("http://".length)}`;
+  }
+
+  return httpUrl;
 }

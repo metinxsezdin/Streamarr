@@ -77,7 +77,11 @@ export function AuthProvider({ children }: PropsWithChildren): JSX.Element {
         return { status: "needs_setup", lastBackendUrl: current.data.baseUrl };
       }
 
-      return { status: "needs_setup", lastBackendUrl: current.lastBackendUrl };
+      if (current.status === "needs_setup") {
+        return { status: "needs_setup", lastBackendUrl: current.lastBackendUrl };
+      }
+
+      return { status: "needs_setup" };
     });
     await clearSession();
   }, []);

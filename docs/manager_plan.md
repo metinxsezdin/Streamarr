@@ -272,13 +272,13 @@ Create a cross-platform control panel for Streamarr using Expo (React Native) fo
    - [x] Ayarlar ekranı ile `/config` okuma/güncelleme ve hata durumları için mesajlama.
    - [x] Dashboard kartları + `/jobs/run` tetikleyen pipeline butonu ve `/jobs/metrics` görünümü.
 4. **Phase 3**: Library + Jobs modules
-   - Library list, detail view, job list/log streaming.
-   - STRM regenerate action from UI.
-   - Infinite scroll/pagination controls.
-   - Skeleton loaders and optimistic updates for key lists to improve perceived performance on slower devices.
-   - Search/filter (site, year, metadata presence).
-   - Job detail view with WebSocket log streaming, cancel button.
-   - "Test playback" action hitting `/play/<id>?format=json` to confirm resolver path.
+   - [x] Library list, detail view, job list/log streaming.
+   - [x] STRM regenerate action from UI.
+   - [x] Infinite scroll/pagination controls.
+   - [x] Skeleton loaders and optimistic feedback for key lists to improve perceived performance on slower devices.
+   - [x] Search/filter (site, year, metadata presence).
+   - [x] Job detail view with WebSocket log streaming, cancel button.
+   - [x] "Test playback" action hitting `/play/<id>?format=json` to confirm resolver path.
 5. **Phase 4**: Scheduler & notifications
    - UI for cron-like schedules.
    - Optional push notification integration.

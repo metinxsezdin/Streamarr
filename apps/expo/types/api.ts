@@ -22,10 +22,17 @@ export interface HealthStatus {
   queue: QueueHealthStatus;
 }
 
+export type JobStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
 export interface JobModel {
   id: string;
   type: string;
-  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  status: JobStatus;
   progress: number;
   worker_id?: string | null;
   payload?: Record<string, unknown> | null;
@@ -59,6 +66,14 @@ export interface StreamVariantModel {
 
 export type LibraryItemType = "movie" | "episode";
 
+export type LibrarySortOption =
+  | "updated_desc"
+  | "updated_asc"
+  | "title_asc"
+  | "title_desc"
+  | "year_desc"
+  | "year_asc";
+
 export interface LibraryItemModel {
   id: string;
   title: string;
@@ -76,9 +91,21 @@ export interface LibraryListModel {
   page_size: number;
 }
 
+export interface LibraryMetricsModel {
+  total: number;
+  site_counts: Record<string, number>;
+  type_counts: Record<string, number>;
+  tmdb_enriched: number;
+  tmdb_missing: number;
+}
+
 export interface JobRunRequest {
   type: string;
   payload?: Record<string, unknown> | null;
+}
+
+export interface JobCancelRequest {
+  reason?: string | null;
 }
 
 export interface ConfigUpdate {
@@ -86,4 +113,13 @@ export interface ConfigUpdate {
   strm_output_path?: string | null;
   tmdb_api_key?: string | null;
   html_title_fetch?: boolean | null;
+}
+
+export interface JobLogModel {
+  id: number;
+  job_id: string;
+  level: "debug" | "info" | "warning" | "error";
+  message: string;
+  context?: Record<string, unknown> | null;
+  created_at: string;
 }
