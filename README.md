@@ -66,6 +66,84 @@ docker compose down
 
 ---
 
+## Manager Backend (FastAPI + Redis Queue)
+
+The new manager backend provides a FastAPI surface, RQ-powered background jobs, and a small CLI.
+
+### Quick start (single command)
+
+Use the helper script to bring up Redis, the API, and the worker together:
+
+```bash
+python scripts/run_manager_stack.py
+```
+
+By default the script:
+
+- Spins up the `redis` service defined in `docker-compose.yml` (skip with `--no-start-redis`).
+- Launches `uvicorn` with auto-reload on `http://127.0.0.1:8000`.
+- Starts the RQ worker connected to the same Redis instance.
+
+Override behaviour with flags such as `--host`, `--port`, or `--redis-url`. The script forwards all logs to your terminal and shuts everything down when you press <kbd>Ctrl</kbd>+<kbd>C</kbd>.
+
+### Manual setup
+
+If you prefer to manage each process yourself, follow these steps instead:
+
+1. **Create & activate a virtual environment** (optional but recommended)
+
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # Windows: .venv\Scripts\activate
+   ```
+
+2. **Install backend dependencies**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Start Redis** – required for the job queue. You can reuse docker-compose:
+
+   ```bash
+   docker compose up -d redis
+   ```
+
+   > Redis defaults to `redis://localhost:6379/0`. Override with `STREAMARR_MANAGER_REDIS_URL` if needed.
+
+4. **Launch the Manager API** (served on http://127.0.0.1:8000 by default):
+
+   ```bash
+   cd backend
+   make dev
+   # or
+   uvicorn backend.manager_api.app:create_app --factory --reload
+   ```
+
+   The API auto-creates `data/manager.db` with default configuration the first time it runs. Adjust settings via environment variables prefixed with `STREAMARR_MANAGER_` (e.g. `STREAMARR_MANAGER_DATABASE_URL`).
+
+5. **Run the background worker** in another terminal so queued jobs execute:
+
+   ```bash
+   cd backend
+   make worker
+   # or
+   python -m backend.manager_worker
+   ```
+
+6. **(Optional) Use the CLI** – interact with the API for smoke tests:
+
+   ```bash
+   python -m backend.manager_cli health check
+   python -m backend.manager_cli setup --resolver-url http://localhost:5055
+   ```
+
+   Provide `--api-url http://127.0.0.1:8000` if the API is hosted on a different address.
+
+With the manager backend running, the Expo app and CLI will talk to `http://127.0.0.1:8000` by default. The API documentation lives at `http://127.0.0.1:8000/docs` for interactive exploration.
+
+---
+
 ## Resolver + STRM Workflow (Manual)
 
 1. **Install dependencies**
